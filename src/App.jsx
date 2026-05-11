@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 const STORAGE_KEY = "activity-staff-scheduler:v1";
+const TESSERACT_CDN = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
 
 const defaultStaff = ["思賢", "元妙", "旻恩", "崇萱", "詠禎", "嘉鴻"];
 
@@ -171,6 +172,81 @@ function normalizeImportedData(input) {
   };
 }
 
+function loadTesseract() {
+  if (window.Tesseract) return Promise.resolve(window.Tesseract);
+
+  return new Promise((resolve, reject) => {
+    const existingScript = document.querySelector(`script[src="${TESSERACT_CDN}"]`);
+
+    if (existingScript) {
+      existingScript.addEventListener("load", () => resolve(window.Tesseract), { once: true });
+      existingScript.addEventListener("error", () => reject(new Error("OCR 套件載入失敗。")), { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = TESSERACT_CDN;
+    script.async = true;
+    script.onload = () => resolve(window.Tesseract);
+    script.onerror = () => reject(new Error("OCR 套件載入失敗，請確認網路連線後再試。"));
+    document.head.appendChild(script);
+  });
+}
+
+function extractJsonFromText(text) {
+  const trimmed = text.trim();
+  if (!trimmed) throw new Error("尚未貼上 AI 解析後的 JSON。");
+
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    const candidate = fenced ? fenced[1] : trimmed.slice(trimmed.indexOf("{"), trimmed.lastIndexOf("}") + 1);
+    if (!candidate || candidate === trimmed) throw new Error("找不到可解析的 JSON 物件。");
+    return JSON.parse(candidate);
+  }
+}
+
+function createAiParsingPrompt({ staff, roleSlots, ocrText }) {
+  return `請把以下活動流程表 OCR 文字整理成排班系統 JSON。
+
+只回傳 JSON，不要 Markdown，不要解釋。
+
+資料結構必須完全符合：
+{
+  "staff": string[],
+  "roleSlots": string[],
+  "schedules": [
+    {
+      "date": "日期或第幾天",
+      "activities": [
+        {
+          "id": "英文或拼音識別碼",
+          "title": "活動名稱",
+          "fixed": boolean,
+          "sessions": [
+            { "time": "HH:MM–HH:MM", "content": "流程內容" }
+          ]
+        }
+      ]
+    }
+  ],
+  "assignments": {}
+}
+
+整理規則：
+1. 支援兩日以上活動，每一天放在 schedules 的一個物件。
+2. 法會活動固定放在 activities 第一個，並設定 fixed: true。
+3. 其他活動依日期與活動數量往右排列，設定 fixed: false。
+4. 同一日期內不同活動若共用同一時段，time 必須寫成完全相同的字串。
+5. 人員不要自動安排，assignments 保持空物件。
+6. staff 若 OCR 沒有名單，使用目前名單：${JSON.stringify(staff)}。
+7. roleSlots 若 OCR 沒有職務，使用目前職務：${JSON.stringify(roleSlots)}。
+
+OCR 文字：
+${ocrText}`;
+}
+
 export default function ActivitySchedulerPrototype() {
   const [staff, setStaff] = useState(defaultStaff);
   const [schedules, setSchedules] = useState(defaultSchedules);
@@ -179,6 +255,14 @@ export default function ActivitySchedulerPrototype() {
   const [selectedStaff, setSelectedStaff] = useState("");
   const [jsonInput, setJsonInput] = useState("");
   const [importMessage, setImportMessage] = useState("");
+  const [flowImage, setFlowImage] = useState(null);
+  const [flowImageUrl, setFlowImageUrl] = useState("");
+  const [ocrText, setOcrText] = useState("");
+  const [ocrMessage, setOcrMessage] = useState("");
+  const [ocrProgress, setOcrProgress] = useState(0);
+  const [isOcrRunning, setIsOcrRunning] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiJson, setAiJson] = useState("");
 
   useEffect(() => {
     const saved = window.localStorage.getItem(STORAGE_KEY);
@@ -201,6 +285,12 @@ export default function ActivitySchedulerPrototype() {
     const payload = { staff, schedules, assignments, roleSlots };
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   }, [staff, schedules, assignments, roleSlots]);
+
+  useEffect(() => {
+    return () => {
+      if (flowImageUrl) URL.revokeObjectURL(flowImageUrl);
+    };
+  }, [flowImageUrl]);
 
   const conflicts = useMemo(() => {
     const map = {};
@@ -251,6 +341,86 @@ export default function ActivitySchedulerPrototype() {
       setImportMessage("JSON 匯入完成，已同步寫入 localStorage。");
     } catch (error) {
       setImportMessage(`JSON 匯入失敗：${error.message}`);
+    }
+  }
+
+  function handleFlowImageChange(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (flowImageUrl) URL.revokeObjectURL(flowImageUrl);
+    setFlowImage(file);
+    setFlowImageUrl(URL.createObjectURL(file));
+    setOcrMessage(`已載入圖片：${file.name}`);
+    setOcrProgress(0);
+  }
+
+  async function runBrowserOcr() {
+    if (!flowImage) {
+      setOcrMessage("請先選擇流程表圖片。");
+      return;
+    }
+
+    setIsOcrRunning(true);
+    setOcrProgress(0);
+    setOcrMessage("OCR 載入中...");
+
+    try {
+      const Tesseract = await loadTesseract();
+      const result = await Tesseract.recognize(flowImage, "chi_tra+eng", {
+        logger: (entry) => {
+          if (entry.status === "recognizing text") {
+            setOcrProgress(Math.round(entry.progress * 100));
+          }
+        },
+      });
+      setOcrText(result.data.text.trim());
+      setOcrMessage("OCR 完成，請檢查文字後產生 AI 解析提示。");
+    } catch (error) {
+      setOcrMessage(`OCR 失敗：${error.message}`);
+    } finally {
+      setIsOcrRunning(false);
+    }
+  }
+
+  function buildAiPrompt() {
+    if (!ocrText.trim()) {
+      setOcrMessage("請先執行 OCR 或貼上流程表文字。");
+      return;
+    }
+
+    setAiPrompt(createAiParsingPrompt({ staff, roleSlots, ocrText }));
+    setOcrMessage("已產生 AI 解析提示，可貼到 ChatGPT 或其他 AI 取得 JSON。");
+  }
+
+  async function copyAiPrompt() {
+    if (!aiPrompt) {
+      setOcrMessage("請先產生 AI 解析提示。");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(aiPrompt);
+      setOcrMessage("AI 解析提示已複製。");
+    } catch {
+      setOcrMessage("瀏覽器不允許自動複製，請手動選取提示內容。");
+    }
+  }
+
+  function importAiJson() {
+    try {
+      const parsed = extractJsonFromText(aiJson);
+      const normalized = normalizeImportedData(parsed);
+      setStaff(normalized.staff);
+      setSchedules(normalized.schedules);
+      setAssignments(normalized.assignments);
+      setRoleSlots(normalized.roleSlots);
+      setJsonInput(JSON.stringify(normalized, null, 2));
+      setSelectedStaff("");
+      setImportMessage("AI 解析 JSON 已匯入，並同步寫入 localStorage。");
+      setOcrMessage("AI JSON 匯入完成。");
+    } catch (error) {
+      setOcrMessage(`AI JSON 匯入失敗：${error.message}`);
     }
   }
 
@@ -399,6 +569,101 @@ export default function ActivitySchedulerPrototype() {
               <textarea readOnly value={exportJson} className="mt-3 h-28 w-full resize-y rounded-lg border border-stone-300 bg-stone-50 p-3 font-mono text-xs" />
             </section>
           </div>
+
+          <section className="mb-4 rounded-lg border border-stone-300 bg-white p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-base font-semibold">圖片 OCR / AI 解析</h2>
+              {ocrMessage && <div className="text-sm text-stone-600">{ocrMessage}</div>}
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[280px_minmax(0,1fr)_minmax(0,1fr)]">
+              <div>
+                <label className="block text-sm font-semibold text-stone-800" htmlFor="flow-image">
+                  流程表圖片
+                </label>
+                <input
+                  id="flow-image"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFlowImageChange}
+                  className="mt-2 block w-full text-sm text-stone-700 file:mr-3 file:rounded-lg file:border-0 file:bg-stone-900 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white"
+                />
+
+                <div className="mt-3 aspect-[4/5] overflow-hidden rounded-lg border border-stone-300 bg-stone-50">
+                  {flowImageUrl ? (
+                    <img src={flowImageUrl} alt="流程表預覽" className="h-full w-full object-contain" />
+                  ) : (
+                    <div className="flex h-full items-center justify-center px-4 text-center text-sm text-stone-400">尚未選擇圖片</div>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={runBrowserOcr}
+                  disabled={isOcrRunning}
+                  className="mt-3 w-full rounded-lg bg-stone-900 px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-stone-400"
+                >
+                  {isOcrRunning ? `OCR ${ocrProgress}%` : "執行 OCR"}
+                </button>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between gap-2">
+                  <label className="block text-sm font-semibold text-stone-800" htmlFor="ocr-text">
+                    OCR 文字
+                  </label>
+                  <button type="button" onClick={buildAiPrompt} className="rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-sm font-semibold text-stone-800">
+                    產生提示
+                  </button>
+                </div>
+                <textarea
+                  id="ocr-text"
+                  value={ocrText}
+                  onChange={(event) => setOcrText(event.target.value)}
+                  className="mt-2 h-72 w-full resize-y rounded-lg border border-stone-300 bg-stone-50 p-3 text-sm leading-6 outline-none focus:border-stone-700"
+                  placeholder="OCR 文字會出現在這裡，也可以直接貼上圖片解析出的文字。"
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between gap-2">
+                  <label className="block text-sm font-semibold text-stone-800" htmlFor="ai-prompt">
+                    AI 解析提示
+                  </label>
+                  <button type="button" onClick={copyAiPrompt} className="rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-sm font-semibold text-stone-800">
+                    複製
+                  </button>
+                </div>
+                <textarea
+                  id="ai-prompt"
+                  readOnly
+                  value={aiPrompt}
+                  className="mt-2 h-72 w-full resize-y rounded-lg border border-stone-300 bg-stone-50 p-3 font-mono text-xs leading-5"
+                  placeholder="按「產生提示」後，將提示交給 AI 轉成排班 JSON。"
+                />
+              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
+              <div>
+                <label className="block text-sm font-semibold text-stone-800" htmlFor="ai-json">
+                  AI 回傳 JSON
+                </label>
+                <textarea
+                  id="ai-json"
+                  value={aiJson}
+                  onChange={(event) => setAiJson(event.target.value)}
+                  className="mt-2 h-36 w-full resize-y rounded-lg border border-stone-300 bg-white p-3 font-mono text-xs outline-none focus:border-stone-700"
+                  placeholder='{"staff":[],"roleSlots":[],"schedules":[],"assignments":{}}'
+                />
+              </div>
+              <div className="flex items-end">
+                <button type="button" onClick={importAiJson} className="w-full rounded-lg bg-stone-900 px-4 py-2 text-sm font-semibold text-white lg:w-auto">
+                  匯入 AI JSON
+                </button>
+              </div>
+            </div>
+          </section>
 
           <div className="space-y-6">
             {schedules.map((day) => {
