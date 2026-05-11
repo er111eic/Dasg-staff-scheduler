@@ -287,6 +287,7 @@ export default function ActivitySchedulerPrototype() {
   const [firebaseEventId, setFirebaseEventId] = useState("current-event");
   const [firebaseMessage, setFirebaseMessage] = useState("");
   const [isFirebaseBusy, setIsFirebaseBusy] = useState(false);
+  const [isAdminOpen, setIsAdminOpen] = useState(false);
 
   useEffect(() => {
     const saved = window.localStorage.getItem(STORAGE_KEY);
@@ -338,6 +339,8 @@ export default function ActivitySchedulerPrototype() {
     () => JSON.stringify({ staff, schedules, assignments, roleSlots }, null, 2),
     [staff, schedules, assignments, roleSlots],
   );
+
+  const assignedCount = useMemo(() => Object.keys(assignments).length, [assignments]);
 
   function assignPerson(slotKey) {
     if (!selectedStaff) return;
@@ -571,9 +574,9 @@ export default function ActivitySchedulerPrototype() {
             key={person}
             type="button"
             onClick={() => setSelectedStaff(person)}
-            className={`rounded-lg border px-3 py-2 text-left text-sm font-medium transition ${
+            className={`rounded-md border px-3 py-2.5 text-left text-sm font-semibold transition ${
               selectedStaff === person
-                ? "border-stone-900 bg-stone-900 text-white"
+                ? "border-stone-950 bg-stone-950 text-white"
                 : "border-stone-300 bg-white text-stone-800 hover:border-stone-500"
             }`}
           >
@@ -595,17 +598,17 @@ export default function ActivitySchedulerPrototype() {
           return (
             <div
               key={slotKey}
-              className={`relative min-h-16 rounded-lg border text-xs transition ${
+              className={`relative min-h-[58px] rounded-md border text-xs transition ${
                 conflict
                   ? "border-red-500 bg-red-50"
                   : person
-                    ? "border-stone-400 bg-white"
-                    : "border-dashed border-stone-300 bg-stone-50 hover:bg-white"
+                    ? "border-stone-500 bg-white"
+                    : "border-dashed border-stone-300 bg-stone-50 hover:border-stone-500 hover:bg-white"
               }`}
             >
-              <button type="button" onClick={() => assignPerson(slotKey)} className="h-full min-h-16 w-full p-2 text-left">
-                <div className="font-semibold text-stone-800">{role}</div>
-                <div className={`mt-1 pr-6 ${person ? "font-semibold text-stone-950" : "text-stone-400"}`}>
+              <button type="button" onClick={() => assignPerson(slotKey)} className="h-full min-h-[58px] w-full p-2 text-left">
+                <div className="font-semibold text-stone-700">{role}</div>
+                <div className={`mt-1 pr-7 text-sm ${person ? "font-semibold text-stone-950" : "text-stone-400"}`}>
                   {person || "未安排"}
                 </div>
                 {conflict && <div className="mt-1 font-semibold text-red-600">同時段衝突</div>}
@@ -614,11 +617,11 @@ export default function ActivitySchedulerPrototype() {
                 <button
                   type="button"
                   onClick={() => clearSlot(slotKey)}
-                  className="absolute right-1.5 top-1.5 rounded-md border border-stone-300 bg-white px-1.5 py-0.5 text-xs font-semibold text-stone-600 hover:border-red-400 hover:text-red-600"
+                  className="absolute right-1.5 top-1.5 h-5 w-5 rounded border border-stone-300 bg-white text-xs font-semibold leading-4 text-stone-500 hover:border-red-400 hover:text-red-600"
                   aria-label={`清除 ${role} 的 ${person}`}
                   title="清除這格人員"
                 >
-                  清除
+                  ×
                 </button>
               )}
             </div>
@@ -630,83 +633,75 @@ export default function ActivitySchedulerPrototype() {
 
   function EventCell({ date, time, activity, session }) {
     if (!session) {
-      return <div className="min-h-28 rounded-lg border border-stone-200 bg-stone-50 p-3 text-sm text-stone-400">無活動</div>;
+      return <div className="min-h-[112px] rounded-md border border-stone-200 bg-stone-50 p-3 text-sm text-stone-400">—</div>;
     }
 
     return (
-      <div className="min-h-28 rounded-lg border border-stone-300 bg-white p-3">
+      <div className="min-h-[112px] rounded-md border border-stone-300 bg-white p-3">
         <div className="text-sm font-semibold leading-relaxed text-stone-950">{session.content}</div>
         <AssignmentSlots date={date} time={time} activityId={activity.id} />
       </div>
     );
   }
 
-  return (
-    <div className="min-h-screen bg-stone-100 text-stone-950">
-      <div className="min-h-screen pl-64">
-        <aside className="fixed inset-y-0 left-0 z-20 w-64 overflow-y-auto border-r border-stone-300 bg-stone-100 p-5">
-          <h1 className="text-2xl font-bold">活動人力排班</h1>
-          <p className="mt-2 text-sm leading-6 text-stone-600">以日期、時段、活動與職務安排人員，並偵測同日同時段重複安排。</p>
+  function AdminTools() {
+    if (!isAdminOpen) return null;
 
-          <div className="mt-5">
-            <div className="mb-2 text-sm font-semibold">人員</div>
-            <StaffPool />
-          </div>
+    return (
+      <section className="mb-4 rounded-md border border-stone-300 bg-white">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 px-4 py-3">
+          <h2 className="text-base font-semibold">管理工具</h2>
+          <button
+            type="button"
+            onClick={() => setIsAdminOpen(false)}
+            className="rounded-md border border-stone-300 bg-white px-3 py-1.5 text-sm font-semibold text-stone-700 hover:border-stone-500"
+          >
+            收合
+          </button>
+        </div>
 
-          <div className="mt-4 rounded-lg border border-stone-300 bg-white p-3 text-sm">
-            <div className="text-stone-500">目前選擇</div>
-            <div className="mt-1 font-semibold">{selectedStaff || "尚未選擇"}</div>
-          </div>
-
-          <div className="mt-5">
-            <div className="mb-2 text-sm font-semibold">JSON 匯入</div>
+        <div className="grid grid-cols-1 gap-4 p-4 xl:grid-cols-2">
+          <section className="rounded-md border border-stone-200 p-4">
+            <h3 className="text-sm font-semibold">資料匯入</h3>
             <textarea
               value={jsonInput}
               onChange={(event) => setJsonInput(event.target.value)}
-              className="h-44 w-full resize-y rounded-lg border border-stone-300 bg-white p-3 font-mono text-xs outline-none focus:border-stone-700"
+              className="mt-3 h-36 w-full resize-y rounded-md border border-stone-300 bg-stone-50 p-3 font-mono text-xs outline-none focus:border-stone-700"
               placeholder='{"staff":[],"roleSlots":[],"schedules":[],"assignments":{}}'
             />
-            <div className="mt-2 flex gap-2">
-              <button type="button" onClick={importJson} className="rounded-lg bg-stone-900 px-3 py-2 text-sm font-semibold text-white">
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button type="button" onClick={importJson} className="rounded-md bg-stone-950 px-3 py-2 text-sm font-semibold text-white">
                 匯入 JSON
               </button>
               <button
                 type="button"
                 onClick={resetToDefault}
-                className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm font-semibold text-stone-800"
+                className="rounded-md border border-stone-300 bg-white px-3 py-2 text-sm font-semibold text-stone-800 hover:border-stone-500"
               >
-                還原
+                還原預設
               </button>
             </div>
             {importMessage && <div className="mt-2 text-xs leading-5 text-stone-600">{importMessage}</div>}
-          </div>
-        </aside>
+          </section>
 
-        <main className="mx-auto min-w-0 max-w-[1236px] px-5 py-5">
-          <div className="mb-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
-            <section className="rounded-lg border border-stone-300 bg-white p-4">
-              <h2 className="text-base font-semibold">資料結構</h2>
-              <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-                <div className="rounded-lg border border-stone-200 p-3">staff：{staff.length} 人</div>
-                <div className="rounded-lg border border-stone-200 p-3">roleSlots：{roleSlots.length} 項</div>
-                <div className="rounded-lg border border-stone-200 p-3">schedules：{schedules.length} 日</div>
-                <div className="rounded-lg border border-stone-200 p-3">assignments：{Object.keys(assignments).length} 筆</div>
-              </div>
-            </section>
+          <section className="rounded-md border border-stone-200 p-4">
+            <h3 className="text-sm font-semibold">資料匯出</h3>
+            <textarea readOnly value={exportJson} className="mt-3 h-36 w-full resize-y rounded-md border border-stone-300 bg-stone-50 p-3 font-mono text-xs" />
+            <div className="mt-3 grid grid-cols-2 gap-2 text-sm text-stone-700">
+              <div className="rounded-md border border-stone-200 p-2">人員：{staff.length}</div>
+              <div className="rounded-md border border-stone-200 p-2">職務：{roleSlots.length}</div>
+              <div className="rounded-md border border-stone-200 p-2">日期：{schedules.length}</div>
+              <div className="rounded-md border border-stone-200 p-2">已排：{assignedCount}</div>
+            </div>
+          </section>
 
-            <section className="rounded-lg border border-stone-300 bg-white p-4">
-              <h2 className="text-base font-semibold">匯出 JSON</h2>
-              <textarea readOnly value={exportJson} className="mt-3 h-28 w-full resize-y rounded-lg border border-stone-300 bg-stone-50 p-3 font-mono text-xs" />
-            </section>
-          </div>
-
-          <section className="mb-4 rounded-lg border border-stone-300 bg-white p-4">
+          <section className="rounded-md border border-stone-200 p-4 xl:col-span-2">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-base font-semibold">Firebase 儲存</h2>
+              <h3 className="text-sm font-semibold">Firebase 儲存</h3>
               {firebaseMessage && <div className="text-sm text-stone-600">{firebaseMessage}</div>}
             </div>
 
-            <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
+            <div className="mt-3 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
               <div>
                 <label className="block text-sm font-semibold text-stone-800" htmlFor="firebase-config">
                   Firebase config
@@ -715,7 +710,7 @@ export default function ActivitySchedulerPrototype() {
                   id="firebase-config"
                   value={firebaseConfigText}
                   onChange={(event) => setFirebaseConfigText(event.target.value)}
-                  className="mt-2 h-36 w-full resize-y rounded-lg border border-stone-300 bg-stone-50 p-3 font-mono text-xs outline-none focus:border-stone-700"
+                  className="mt-2 h-32 w-full resize-y rounded-md border border-stone-300 bg-stone-50 p-3 font-mono text-xs outline-none focus:border-stone-700"
                   placeholder='{"apiKey":"","authDomain":"","projectId":"","storageBucket":"","messagingSenderId":"","appId":""}'
                 />
               </div>
@@ -728,28 +723,73 @@ export default function ActivitySchedulerPrototype() {
                   id="firebase-event-id"
                   value={firebaseEventId}
                   onChange={(event) => setFirebaseEventId(event.target.value)}
-                  className="mt-2 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm outline-none focus:border-stone-700"
+                  className="mt-2 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none focus:border-stone-700"
                 />
                 <div className="mt-3 grid grid-cols-2 gap-2">
-                  <button type="button" onClick={loadEventFromFirebase} disabled={isFirebaseBusy} className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm font-semibold text-stone-800 disabled:text-stone-400">
-                    載入活動
+                  <button type="button" onClick={loadEventFromFirebase} disabled={isFirebaseBusy} className="rounded-md border border-stone-300 bg-white px-3 py-2 text-sm font-semibold text-stone-800 disabled:text-stone-400">
+                    載入
                   </button>
-                  <button type="button" onClick={saveEventToFirebase} disabled={isFirebaseBusy} className="rounded-lg bg-stone-900 px-3 py-2 text-sm font-semibold text-white disabled:bg-stone-400">
-                    儲存活動
+                  <button type="button" onClick={saveEventToFirebase} disabled={isFirebaseBusy} className="rounded-md bg-stone-950 px-3 py-2 text-sm font-semibold text-white disabled:bg-stone-400">
+                    儲存
                   </button>
-                  <button type="button" onClick={saveTemplateToFirebase} disabled={isFirebaseBusy} className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm font-semibold text-stone-800 disabled:text-stone-400">
+                  <button type="button" onClick={saveTemplateToFirebase} disabled={isFirebaseBusy} className="rounded-md border border-stone-300 bg-white px-3 py-2 text-sm font-semibold text-stone-800 disabled:text-stone-400">
                     存模板
                   </button>
-                  <button type="button" onClick={saveStaffListToFirebase} disabled={isFirebaseBusy} className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm font-semibold text-stone-800 disabled:text-stone-400">
+                  <button type="button" onClick={saveStaffListToFirebase} disabled={isFirebaseBusy} className="rounded-md border border-stone-300 bg-white px-3 py-2 text-sm font-semibold text-stone-800 disabled:text-stone-400">
                     存人員
                   </button>
-                  <button type="button" onClick={saveHistoryToFirebase} disabled={isFirebaseBusy} className="col-span-2 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm font-semibold text-stone-800 disabled:text-stone-400">
+                  <button type="button" onClick={saveHistoryToFirebase} disabled={isFirebaseBusy} className="col-span-2 rounded-md border border-stone-300 bg-white px-3 py-2 text-sm font-semibold text-stone-800 disabled:text-stone-400">
                     建立歷史排班
                   </button>
                 </div>
               </div>
             </div>
           </section>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-stone-100 text-stone-950">
+      <div className="min-h-screen lg:pl-64">
+        <aside className="border-b border-stone-300 bg-stone-100 p-5 lg:fixed lg:inset-y-0 lg:left-0 lg:z-20 lg:w-64 lg:overflow-y-auto lg:border-b-0 lg:border-r">
+          <h1 className="text-2xl font-bold">活動人力排班</h1>
+          <p className="mt-2 text-sm leading-6 text-stone-600">先選人，再點表格中的職務格。</p>
+
+          <div className="mt-5">
+            <div className="mb-2 text-sm font-semibold">人員</div>
+            <StaffPool />
+          </div>
+
+          <div className="mt-4 rounded-md border border-stone-300 bg-white p-3 text-sm">
+            <div className="text-stone-500">目前選擇</div>
+            <div className="mt-1 text-lg font-semibold">{selectedStaff || "尚未選擇"}</div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIsAdminOpen((open) => !open)}
+            className="mt-5 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm font-semibold text-stone-700 hover:border-stone-500"
+          >
+            {isAdminOpen ? "收合管理工具" : "管理工具"}
+          </button>
+        </aside>
+
+        <main className="mx-auto min-w-0 max-w-[1240px] px-4 py-4 sm:px-5">
+          <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-bold">排班表</h2>
+              <div className="mt-1 text-sm text-stone-600">
+                {schedules.length} 天活動，已安排 {assignedCount} 格
+              </div>
+            </div>
+            <div className="rounded-md border border-stone-300 bg-white px-3 py-2 text-sm">
+              目前選擇：<span className="font-semibold">{selectedStaff || "尚未選擇"}</span>
+            </div>
+          </div>
+
+          <AdminTools />
 
           {OCR_WORKFLOW_ENABLED && (
             <section className="mb-4 rounded-lg border border-stone-300 bg-white p-4">
@@ -855,7 +895,7 @@ export default function ActivitySchedulerPrototype() {
               const gridTemplateColumns = `120px minmax(320px, 1.2fr) repeat(${Math.max(activities.length - 1, 0)}, minmax(280px, 1fr))`;
 
               return (
-                <section key={day.date} className="overflow-x-auto rounded-lg border border-stone-300 bg-white">
+                <section key={day.date} className="overflow-x-auto rounded-md border border-stone-300 bg-white">
                   <div style={{ minWidth: `${120 + activities.length * 320}px` }}>
                     <div className="border-b border-stone-300 px-4 py-3 text-lg font-bold">{day.date}</div>
                     <div className="grid border-b border-stone-300 bg-stone-900 text-sm font-semibold text-white" style={{ gridTemplateColumns }}>
