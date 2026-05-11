@@ -13,6 +13,10 @@ React 活動人力排班系統，用於多日活動流程、活動欄位、人�
 - JSON 匯入
 - 排班結果 JSON 匯出
 
+## JSON Schema
+
+See [docs/json-schema.md](docs/json-schema.md).
+
 ## Roadmap
 
 1. React + JSON 匯入 + localStorage + GitHub Pages/Vercel
@@ -25,3 +29,23 @@ React 活動人力排班系統，用於多日活動流程、活動欄位、人�
 npm install
 npm run dev
 ```
+
+## Build
+
+```bash
+npm run build
+```
+
+## Deploy With Vercel
+
+1. Import `er111eic/Dasg-staff-scheduler` in Vercel.
+2. Framework preset: Vite.
+3. Build command: `npm run build`.
+4. Output directory: `dist`.
+5. Deploy from `main`.
+
+The included `vercel.json` stores these defaults.
+
+## CI
+
+GitHub Actions runs `npm install` and `npm run build` on pushes and pull requests to `main`.
