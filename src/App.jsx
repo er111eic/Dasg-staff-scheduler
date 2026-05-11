@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 
 const STORAGE_KEY = "activity-staff-scheduler:v1";
+const FIREBASE_CONFIG_KEY = "activity-staff-scheduler:firebase-config";
+const FIREBASE_SDK_VERSION = "12.7.0";
+const OCR_WORKFLOW_ENABLED = false;
 const TESSERACT_CDN = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
 
 const defaultStaff = ["思賢", "元妙", "旻恩", "崇萱", "詠禎", "嘉鴻"];
@@ -247,6 +250,23 @@ OCR 文字：
 ${ocrText}`;
 }
 
+async function createFirebaseClient(config) {
+  const appModule = await import(/* @vite-ignore */ `https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-app.js`);
+  const firestoreModule = await import(/* @vite-ignore */ `https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-firestore.js`);
+  const app = appModule.initializeApp(config);
+  const db = firestoreModule.getFirestore(app);
+
+  return {
+    db,
+    doc: firestoreModule.doc,
+    collection: firestoreModule.collection,
+    getDoc: firestoreModule.getDoc,
+    setDoc: firestoreModule.setDoc,
+    addDoc: firestoreModule.addDoc,
+    serverTimestamp: firestoreModule.serverTimestamp,
+  };
+}
+
 export default function ActivitySchedulerPrototype() {
   const [staff, setStaff] = useState(defaultStaff);
   const [schedules, setSchedules] = useState(defaultSchedules);
@@ -263,6 +283,10 @@ export default function ActivitySchedulerPrototype() {
   const [isOcrRunning, setIsOcrRunning] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiJson, setAiJson] = useState("");
+  const [firebaseConfigText, setFirebaseConfigText] = useState("");
+  const [firebaseEventId, setFirebaseEventId] = useState("current-event");
+  const [firebaseMessage, setFirebaseMessage] = useState("");
+  const [isFirebaseBusy, setIsFirebaseBusy] = useState(false);
 
   useEffect(() => {
     const saved = window.localStorage.getItem(STORAGE_KEY);
@@ -285,6 +309,11 @@ export default function ActivitySchedulerPrototype() {
     const payload = { staff, schedules, assignments, roleSlots };
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   }, [staff, schedules, assignments, roleSlots]);
+
+  useEffect(() => {
+    const savedConfig = window.localStorage.getItem(FIREBASE_CONFIG_KEY);
+    if (savedConfig) setFirebaseConfigText(savedConfig);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -422,6 +451,107 @@ export default function ActivitySchedulerPrototype() {
     } catch (error) {
       setOcrMessage(`AI JSON 匯入失敗：${error.message}`);
     }
+  }
+
+  function parseFirebaseConfig() {
+    const config = JSON.parse(firebaseConfigText);
+    if (!config || typeof config !== "object") {
+      throw new Error("Firebase config 必須是 JSON 物件。");
+    }
+
+    if (!config.apiKey || !config.projectId || !config.appId) {
+      throw new Error("Firebase config 至少需要 apiKey、projectId、appId。");
+    }
+
+    return config;
+  }
+
+  function currentPayload() {
+    return { staff, schedules, assignments, roleSlots };
+  }
+
+  async function withFirebase(action) {
+    setIsFirebaseBusy(true);
+    setFirebaseMessage("Firebase 連線中...");
+
+    try {
+      const config = parseFirebaseConfig();
+      window.localStorage.setItem(FIREBASE_CONFIG_KEY, firebaseConfigText);
+      const firebase = await createFirebaseClient(config);
+      await action(firebase);
+    } catch (error) {
+      setFirebaseMessage(`Firebase 操作失敗：${error.message}`);
+    } finally {
+      setIsFirebaseBusy(false);
+    }
+  }
+
+  function saveEventToFirebase() {
+    withFirebase(async ({ db, doc, setDoc, serverTimestamp }) => {
+      const eventRef = doc(db, "events", firebaseEventId || "current-event");
+      await setDoc(
+        eventRef,
+        {
+          ...currentPayload(),
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+      setFirebaseMessage(`已儲存活動到 Firebase：events/${firebaseEventId || "current-event"}`);
+    });
+  }
+
+  function loadEventFromFirebase() {
+    withFirebase(async ({ db, doc, getDoc }) => {
+      const eventRef = doc(db, "events", firebaseEventId || "current-event");
+      const snapshot = await getDoc(eventRef);
+      if (!snapshot.exists()) {
+        setFirebaseMessage(`找不到 Firebase 活動：events/${firebaseEventId || "current-event"}`);
+        return;
+      }
+
+      const normalized = normalizeImportedData(snapshot.data());
+      setStaff(normalized.staff);
+      setSchedules(normalized.schedules);
+      setAssignments(normalized.assignments);
+      setRoleSlots(normalized.roleSlots);
+      setSelectedStaff("");
+      setFirebaseMessage(`已載入 Firebase 活動：events/${firebaseEventId || "current-event"}`);
+    });
+  }
+
+  function saveTemplateToFirebase() {
+    withFirebase(async ({ db, collection, addDoc, serverTimestamp }) => {
+      const templateRef = await addDoc(collection(db, "templates"), {
+        name: `${firebaseEventId || "current-event"} template`,
+        schedules,
+        roleSlots,
+        createdAt: serverTimestamp(),
+      });
+      setFirebaseMessage(`已建立模板：templates/${templateRef.id}`);
+    });
+  }
+
+  function saveStaffListToFirebase() {
+    withFirebase(async ({ db, collection, addDoc, serverTimestamp }) => {
+      const staffRef = await addDoc(collection(db, "staffLists"), {
+        name: `${firebaseEventId || "current-event"} staff`,
+        staff,
+        createdAt: serverTimestamp(),
+      });
+      setFirebaseMessage(`已建立人員名單：staffLists/${staffRef.id}`);
+    });
+  }
+
+  function saveHistoryToFirebase() {
+    withFirebase(async ({ db, collection, addDoc, serverTimestamp }) => {
+      const historyRef = await addDoc(collection(db, "scheduleHistory"), {
+        eventId: firebaseEventId || "current-event",
+        ...currentPayload(),
+        createdAt: serverTimestamp(),
+      });
+      setFirebaseMessage(`已建立歷史排班：scheduleHistory/${historyRef.id}`);
+    });
   }
 
   function resetToDefault() {
@@ -572,6 +702,58 @@ export default function ActivitySchedulerPrototype() {
 
           <section className="mb-4 rounded-lg border border-stone-300 bg-white p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-base font-semibold">Firebase 儲存</h2>
+              {firebaseMessage && <div className="text-sm text-stone-600">{firebaseMessage}</div>}
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
+              <div>
+                <label className="block text-sm font-semibold text-stone-800" htmlFor="firebase-config">
+                  Firebase config
+                </label>
+                <textarea
+                  id="firebase-config"
+                  value={firebaseConfigText}
+                  onChange={(event) => setFirebaseConfigText(event.target.value)}
+                  className="mt-2 h-36 w-full resize-y rounded-lg border border-stone-300 bg-stone-50 p-3 font-mono text-xs outline-none focus:border-stone-700"
+                  placeholder='{"apiKey":"","authDomain":"","projectId":"","storageBucket":"","messagingSenderId":"","appId":""}'
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-stone-800" htmlFor="firebase-event-id">
+                  活動 ID
+                </label>
+                <input
+                  id="firebase-event-id"
+                  value={firebaseEventId}
+                  onChange={(event) => setFirebaseEventId(event.target.value)}
+                  className="mt-2 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm outline-none focus:border-stone-700"
+                />
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <button type="button" onClick={loadEventFromFirebase} disabled={isFirebaseBusy} className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm font-semibold text-stone-800 disabled:text-stone-400">
+                    載入活動
+                  </button>
+                  <button type="button" onClick={saveEventToFirebase} disabled={isFirebaseBusy} className="rounded-lg bg-stone-900 px-3 py-2 text-sm font-semibold text-white disabled:bg-stone-400">
+                    儲存活動
+                  </button>
+                  <button type="button" onClick={saveTemplateToFirebase} disabled={isFirebaseBusy} className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm font-semibold text-stone-800 disabled:text-stone-400">
+                    存模板
+                  </button>
+                  <button type="button" onClick={saveStaffListToFirebase} disabled={isFirebaseBusy} className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm font-semibold text-stone-800 disabled:text-stone-400">
+                    存人員
+                  </button>
+                  <button type="button" onClick={saveHistoryToFirebase} disabled={isFirebaseBusy} className="col-span-2 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm font-semibold text-stone-800 disabled:text-stone-400">
+                    建立歷史排班
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {OCR_WORKFLOW_ENABLED && (
+            <section className="mb-4 rounded-lg border border-stone-300 bg-white p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-base font-semibold">圖片 OCR / AI 解析</h2>
               {ocrMessage && <div className="text-sm text-stone-600">{ocrMessage}</div>}
             </div>
@@ -664,6 +846,7 @@ export default function ActivitySchedulerPrototype() {
               </div>
             </div>
           </section>
+          )}
 
           <div className="space-y-6">
             {schedules.map((day) => {
