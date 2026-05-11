@@ -351,6 +351,8 @@ export default function ActivitySchedulerPrototype() {
   const lastCloudPayloadRef = useRef("");
   const autoSaveTimerRef = useRef(null);
   const firebaseClientRef = useRef(null);
+  const localChangeSerialRef = useRef(0);
+  const savedChangeSerialRef = useRef(0);
 
   useEffect(() => {
     const saved = window.localStorage.getItem(STORAGE_KEY);
@@ -413,13 +415,17 @@ export default function ActivitySchedulerPrototype() {
             hasCloudLoadedRef.current = true;
 
             if (cloudPayload === lastCloudPayloadRef.current) {
+              if (autoSaveTimerRef.current) window.clearTimeout(autoSaveTimerRef.current);
+              savedChangeSerialRef.current = localChangeSerialRef.current;
               setSyncStatus("已同步雲端");
               setLastSyncedAt(formatSyncTime());
               return;
             }
 
             isApplyingCloudDataRef.current = true;
+            if (autoSaveTimerRef.current) window.clearTimeout(autoSaveTimerRef.current);
             lastCloudPayloadRef.current = cloudPayload;
+            savedChangeSerialRef.current = localChangeSerialRef.current;
             setStaff(normalized.staff);
             setSchedules(normalized.schedules);
             setAssignments(normalized.assignments);
@@ -452,14 +458,19 @@ export default function ActivitySchedulerPrototype() {
 
   useEffect(() => {
     if (!firebaseConfigText.trim() || !hasCloudLoadedRef.current || isApplyingCloudDataRef.current) return undefined;
+    if (localChangeSerialRef.current <= savedChangeSerialRef.current) return undefined;
 
     const payload = currentPayload();
     const payloadJson = JSON.stringify(payload);
-    if (payloadJson === lastCloudPayloadRef.current) return undefined;
+    if (payloadJson === lastCloudPayloadRef.current) {
+      savedChangeSerialRef.current = localChangeSerialRef.current;
+      return undefined;
+    }
 
     setSyncStatus("有變更，準備儲存");
     if (autoSaveTimerRef.current) window.clearTimeout(autoSaveTimerRef.current);
 
+    const savingSerial = localChangeSerialRef.current;
     autoSaveTimerRef.current = window.setTimeout(async () => {
       try {
         setSyncStatus("雲端儲存中");
@@ -468,6 +479,9 @@ export default function ActivitySchedulerPrototype() {
         const firebase = firebaseClientRef.current || (await createFirebaseClient(config));
         firebaseClientRef.current = firebase;
         await savePayloadToFirebase(firebase, payload, "已自動儲存");
+        if (localChangeSerialRef.current === savingSerial) {
+          savedChangeSerialRef.current = savingSerial;
+        }
       } catch (error) {
         setSyncStatus(`自動儲存失敗：${error.message}`);
       }
@@ -504,14 +518,20 @@ export default function ActivitySchedulerPrototype() {
 
   const assignedCount = useMemo(() => Object.keys(assignments).length, [assignments]);
 
+  function markLocalChange() {
+    localChangeSerialRef.current += 1;
+  }
+
   function assignPerson(slotKey, person = selectedStaff) {
     if (!person) return;
+    markLocalChange();
     setAssignments((prev) => ({ ...prev, [slotKey]: person }));
   }
 
   function assignPersonToNextSlot(date, time, activityId, person = selectedStaff) {
     if (!person) return;
 
+    markLocalChange();
     setAssignments((prev) => {
       const next = { ...prev };
       const openRole = roleSlots.find((role) => !next[createSlotKey(date, time, activityId, role)]) || roleSlots[roleSlots.length - 1];
@@ -521,6 +541,7 @@ export default function ActivitySchedulerPrototype() {
   }
 
   function clearSlot(slotKey) {
+    markLocalChange();
     setAssignments((prev) => {
       const next = { ...prev };
       delete next[slotKey];
@@ -533,12 +554,14 @@ export default function ActivitySchedulerPrototype() {
     const name = newStaffName.trim();
     if (!name) return;
 
+    markLocalChange();
     setStaff((prev) => (prev.includes(name) ? prev : [...prev, name]));
     setSelectedStaff(name);
     setNewStaffName("");
   }
 
   function removeStaffMember(person) {
+    markLocalChange();
     setStaff((prev) => prev.filter((name) => name !== person));
     setAssignments((prev) =>
       Object.fromEntries(Object.entries(prev).filter(([, assignedPerson]) => assignedPerson !== person)),
@@ -567,6 +590,7 @@ export default function ActivitySchedulerPrototype() {
     try {
       const parsed = JSON.parse(jsonInput);
       const normalized = normalizeImportedData(parsed);
+      markLocalChange();
       setStaff(normalized.staff);
       setSchedules(normalized.schedules);
       setAssignments(normalized.assignments);
@@ -645,6 +669,7 @@ export default function ActivitySchedulerPrototype() {
     try {
       const parsed = extractJsonFromText(aiJson);
       const normalized = normalizeImportedData(parsed);
+      markLocalChange();
       setStaff(normalized.staff);
       setSchedules(normalized.schedules);
       setAssignments(normalized.assignments);
@@ -723,7 +748,9 @@ export default function ActivitySchedulerPrototype() {
       }
 
       const normalized = normalizeImportedData(snapshot.data());
+      if (autoSaveTimerRef.current) window.clearTimeout(autoSaveTimerRef.current);
       lastCloudPayloadRef.current = JSON.stringify(normalized);
+      savedChangeSerialRef.current = localChangeSerialRef.current;
       setStaff(normalized.staff);
       setSchedules(normalized.schedules);
       setAssignments(normalized.assignments);
@@ -770,6 +797,7 @@ export default function ActivitySchedulerPrototype() {
   }
 
   function resetToDefault() {
+    markLocalChange();
     setStaff(defaultStaff);
     setSchedules(defaultSchedules);
     setAssignments(emptyAssignments);
