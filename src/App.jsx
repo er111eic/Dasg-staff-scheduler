@@ -343,8 +343,8 @@ export default function ActivitySchedulerPrototype() {
 
   return (
     <div className="min-h-screen bg-stone-100 text-stone-950">
-      <div className="mx-auto flex max-w-[1500px] gap-5 px-5">
-        <aside className="sticky top-0 h-screen w-64 shrink-0 overflow-y-auto border-r border-stone-300 py-5 pr-5">
+      <div className="min-h-screen pl-64">
+        <aside className="fixed inset-y-0 left-0 z-20 w-64 overflow-y-auto border-r border-stone-300 bg-stone-100 p-5">
           <h1 className="text-2xl font-bold">活動人力排班</h1>
           <p className="mt-2 text-sm leading-6 text-stone-600">以日期、時段、活動與職務安排人員，並偵測同日同時段重複安排。</p>
 
@@ -382,7 +382,7 @@ export default function ActivitySchedulerPrototype() {
           </div>
         </aside>
 
-        <main className="min-w-0 flex-1 py-5">
+        <main className="mx-auto min-w-0 max-w-[1236px] px-5 py-5">
           <div className="mb-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
             <section className="rounded-lg border border-stone-300 bg-white p-4">
               <h2 className="text-base font-semibold">資料結構</h2>
