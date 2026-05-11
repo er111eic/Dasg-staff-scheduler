@@ -4,6 +4,7 @@ const STORAGE_KEY = "activity-staff-scheduler:v1";
 const FIREBASE_CONFIG_KEY = "activity-staff-scheduler:firebase-config";
 const DEFAULT_FIREBASE_EVENT_ID = "current-event";
 const FIREBASE_SDK_VERSION = "12.7.0";
+const AUTO_SAVE_DELAY_MS = 250;
 const OCR_WORKFLOW_ENABLED = false;
 const TESSERACT_CDN = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
 const DEFAULT_FIREBASE_CONFIG = {
@@ -349,6 +350,7 @@ export default function ActivitySchedulerPrototype() {
   const isApplyingCloudDataRef = useRef(false);
   const lastCloudPayloadRef = useRef("");
   const autoSaveTimerRef = useRef(null);
+  const firebaseClientRef = useRef(null);
 
   useEffect(() => {
     const saved = window.localStorage.getItem(STORAGE_KEY);
@@ -389,6 +391,7 @@ export default function ActivitySchedulerPrototype() {
       try {
         const config = parseFirebaseConfig(firebaseConfigText);
         const firebase = await createFirebaseClient(config);
+        firebaseClientRef.current = firebase;
         const eventId = firebaseEventId || DEFAULT_FIREBASE_EVENT_ID;
         const eventRef = firebase.doc(firebase.db, "events", eventId);
 
@@ -442,6 +445,7 @@ export default function ActivitySchedulerPrototype() {
     return () => {
       cancelled = true;
       hasCloudLoadedRef.current = false;
+      firebaseClientRef.current = null;
       if (unsubscribe) unsubscribe();
     };
   }, [firebaseConfigText, firebaseEventId]);
@@ -461,12 +465,13 @@ export default function ActivitySchedulerPrototype() {
         setSyncStatus("雲端儲存中");
         const config = parseFirebaseConfig(firebaseConfigText);
         window.localStorage.setItem(FIREBASE_CONFIG_KEY, firebaseConfigText);
-        const firebase = await createFirebaseClient(config);
+        const firebase = firebaseClientRef.current || (await createFirebaseClient(config));
+        firebaseClientRef.current = firebase;
         await savePayloadToFirebase(firebase, payload, "已自動儲存");
       } catch (error) {
         setSyncStatus(`自動儲存失敗：${error.message}`);
       }
-    }, 900);
+    }, AUTO_SAVE_DELAY_MS);
 
     return () => {
       if (autoSaveTimerRef.current) window.clearTimeout(autoSaveTimerRef.current);
@@ -535,6 +540,9 @@ export default function ActivitySchedulerPrototype() {
 
   function removeStaffMember(person) {
     setStaff((prev) => prev.filter((name) => name !== person));
+    setAssignments((prev) =>
+      Object.fromEntries(Object.entries(prev).filter(([, assignedPerson]) => assignedPerson !== person)),
+    );
     if (selectedStaff === person) setSelectedStaff("");
   }
 
