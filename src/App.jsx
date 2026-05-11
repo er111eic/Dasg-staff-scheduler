@@ -17,7 +17,7 @@ const DEFAULT_FIREBASE_CONFIG = {
 
 const defaultStaff = ["思賢", "元妙", "旻恩", "崇萱", "詠禎", "嘉鴻"];
 
-const defaultRoleSlots = ["主攝", "副攝", "音控", "機動"];
+const defaultRoleSlots = ["主攝", "副攝", "支援", "音控", "音控支援"];
 
 const defaultSchedules = [
   {
@@ -26,6 +26,7 @@ const defaultSchedules = [
       {
         id: "dharma",
         title: "法會｜士林區",
+        responsibleDistrict: "士林區",
         fixed: true,
         sessions: [
           { time: "08:50–09:20", content: "複習三寶（30分）" },
@@ -45,7 +46,8 @@ const defaultSchedules = [
       },
       {
         id: "scholarship",
-        title: "獎助學金頒獎",
+        title: "獎助學金頒獎｜士林區",
+        responsibleDistrict: "士林區",
         sessions: [
           { time: "11:10–12:00", content: "11:30 報到" },
           { time: "12:00–13:05", content: "13:00 彩排；13:30 受獎人入席" },
@@ -58,11 +60,6 @@ const defaultSchedules = [
           { time: "15:50–16:05", content: "15:55 大合唱；16:00 禮成" },
         ],
       },
-      {
-        id: "support",
-        title: "其他支援",
-        sessions: [],
-      },
     ],
   },
   {
@@ -71,6 +68,7 @@ const defaultSchedules = [
       {
         id: "dharma",
         title: "法會｜士林區",
+        responsibleDistrict: "士林區",
         fixed: true,
         sessions: [
           { time: "06:40–08:10", content: "06:40 八段錦；07:10 獻供；07:30 早餐；08:10 請壇" },
@@ -88,6 +86,7 @@ const defaultSchedules = [
       {
         id: "banxin-graduation",
         title: "畢班｜板新區",
+        responsibleDistrict: "板新區",
         sessions: [
           { time: "06:40–08:10", content: "08:20–08:50 報到（B2禮堂座位安排）" },
           { time: "08:20–09:00", content: "08:30–08:50 獻供；08:50–09:00 善歌帶動唱" },
@@ -98,7 +97,8 @@ const defaultSchedules = [
       },
       {
         id: "gratitude-party",
-        title: "畢業感恩會",
+        title: "畢業感恩會｜台北區",
+        responsibleDistrict: "台北區",
         sessions: [
           { time: "06:40–08:10", content: "08:30–09:30 畢業生報到、領胸花" },
           { time: "12:00–13:10", content: "12:00–12:20 B1餐廳就位；12:20–12:30 負責群／指導點傳師代表；12:30–13:10 用餐" },
@@ -122,9 +122,16 @@ function createSlotKey(date, time, activityId, role) {
 }
 
 function orderActivities(activities) {
-  const fixed = activities.filter((activity) => activity.fixed || activity.id === "dharma");
-  const movable = activities.filter((activity) => !activity.fixed && activity.id !== "dharma");
-  return [...fixed, ...movable];
+  return [...activities].sort((left, right) => {
+    const leftTaipei = left.responsibleDistrict === "台北區" || String(left.title).includes("台北區");
+    const rightTaipei = right.responsibleDistrict === "台北區" || String(right.title).includes("台北區");
+
+    if (leftTaipei !== rightTaipei) return leftTaipei ? -1 : 1;
+    if ((left.fixed || left.id === "dharma") !== (right.fixed || right.id === "dharma")) {
+      return left.fixed || left.id === "dharma" ? -1 : 1;
+    }
+    return 0;
+  });
 }
 
 function parseStartTime(time) {
@@ -149,15 +156,37 @@ function getSession(activity, time) {
   return activity.sessions.find((session) => session.time === time);
 }
 
+function migrateAssignments(input) {
+  if (!input || typeof input !== "object") return emptyAssignments;
+
+  return Object.fromEntries(
+    Object.entries(input).map(([slotKey, person]) => {
+      const parts = slotKey.split("__");
+      const role = parts[3];
+      if (role === "機動") parts[3] = "支援";
+      return [parts.join("__"), person];
+    }),
+  );
+}
+
+function inferResponsibleDistrict(activity) {
+  if (activity.responsibleDistrict) return String(activity.responsibleDistrict);
+  const title = String(activity.title || activity.name || "");
+  if (title.includes("台北區") || activity.id === "gratitude-party") return "台北區";
+  if (title.includes("板新區") || activity.id === "banxin-graduation") return "板新區";
+  if (title.includes("士林區") || activity.id === "dharma" || activity.id === "scholarship") return "士林區";
+  return "";
+}
+
 function normalizeImportedData(input) {
   if (!input || typeof input !== "object") {
     throw new Error("JSON 必須是物件。");
   }
 
   const staff = Array.isArray(input.staff) ? input.staff : defaultStaff;
-  const roleSlots = Array.isArray(input.roleSlots) ? input.roleSlots : defaultRoleSlots;
+  const roleSlots = defaultRoleSlots;
   const schedules = Array.isArray(input.schedules) ? input.schedules : null;
-  const assignments = input.assignments && typeof input.assignments === "object" ? input.assignments : emptyAssignments;
+  const assignments = migrateAssignments(input.assignments);
 
   if (!schedules) {
     throw new Error("JSON 需要包含 schedules 陣列。");
@@ -169,15 +198,18 @@ function normalizeImportedData(input) {
     schedules: schedules.map((day, dayIndex) => ({
       date: String(day.date || `第 ${dayIndex + 1} 天`),
       activities: orderActivities(
-        (Array.isArray(day.activities) ? day.activities : []).map((activity, activityIndex) => ({
-          id: String(activity.id || `activity-${activityIndex + 1}`),
-          title: String(activity.title || activity.name || `活動 ${activityIndex + 1}`),
-          fixed: Boolean(activity.fixed || activity.id === "dharma"),
-          sessions: (Array.isArray(activity.sessions) ? activity.sessions : []).map((session) => ({
-            time: String(session.time || ""),
-            content: String(session.content || session.title || ""),
+        (Array.isArray(day.activities) ? day.activities : [])
+          .filter((activity) => activity.id !== "support" || (Array.isArray(activity.sessions) && activity.sessions.length > 0))
+          .map((activity, activityIndex) => ({
+            id: String(activity.id || `activity-${activityIndex + 1}`),
+            title: String(activity.title || activity.name || `活動 ${activityIndex + 1}`),
+            responsibleDistrict: inferResponsibleDistrict(activity),
+            fixed: Boolean(activity.fixed || activity.id === "dharma"),
+            sessions: (Array.isArray(activity.sessions) ? activity.sessions : []).map((session) => ({
+              time: String(session.time || ""),
+              content: String(session.content || session.title || ""),
+            })),
           })),
-        })),
       ),
     })),
     assignments,
@@ -287,6 +319,7 @@ export default function ActivitySchedulerPrototype() {
   const [assignments, setAssignments] = useState(emptyAssignments);
   const [roleSlots, setRoleSlots] = useState(defaultRoleSlots);
   const [selectedStaff, setSelectedStaff] = useState("");
+  const [newStaffName, setNewStaffName] = useState("");
   const [jsonInput, setJsonInput] = useState("");
   const [importMessage, setImportMessage] = useState("");
   const [flowImage, setFlowImage] = useState(null);
@@ -458,9 +491,20 @@ export default function ActivitySchedulerPrototype() {
 
   const assignedCount = useMemo(() => Object.keys(assignments).length, [assignments]);
 
-  function assignPerson(slotKey) {
-    if (!selectedStaff) return;
-    setAssignments((prev) => ({ ...prev, [slotKey]: selectedStaff }));
+  function assignPerson(slotKey, person = selectedStaff) {
+    if (!person) return;
+    setAssignments((prev) => ({ ...prev, [slotKey]: person }));
+  }
+
+  function assignPersonToNextSlot(date, time, activityId, person = selectedStaff) {
+    if (!person) return;
+
+    setAssignments((prev) => {
+      const next = { ...prev };
+      const openRole = roleSlots.find((role) => !next[createSlotKey(date, time, activityId, role)]) || roleSlots[roleSlots.length - 1];
+      next[createSlotKey(date, time, activityId, openRole)] = person;
+      return next;
+    });
   }
 
   function clearSlot(slotKey) {
@@ -469,6 +513,32 @@ export default function ActivitySchedulerPrototype() {
       delete next[slotKey];
       return next;
     });
+  }
+
+  function addStaffMember(event) {
+    event.preventDefault();
+    const name = newStaffName.trim();
+    if (!name) return;
+
+    setStaff((prev) => (prev.includes(name) ? prev : [...prev, name]));
+    setSelectedStaff(name);
+    setNewStaffName("");
+  }
+
+  function removeStaffMember(person) {
+    setStaff((prev) => prev.filter((name) => name !== person));
+    if (selectedStaff === person) setSelectedStaff("");
+  }
+
+  function handleStaffDragStart(event, person) {
+    event.dataTransfer.setData("text/plain", person);
+    event.dataTransfer.effectAllowed = "copy";
+  }
+
+  function handleDropToSession(event, date, time, activityId) {
+    event.preventDefault();
+    const person = event.dataTransfer.getData("text/plain");
+    assignPersonToNextSlot(date, time, activityId, person);
   }
 
   function isConflict(slotKey, person) {
@@ -694,28 +764,55 @@ export default function ActivitySchedulerPrototype() {
 
   function StaffPool() {
     return (
-      <div className="grid gap-2">
-        {staff.map((person) => (
-          <button
-            key={person}
-            type="button"
-            onClick={() => setSelectedStaff(person)}
-            className={`rounded-md border px-3 py-2.5 text-left text-sm font-semibold transition ${
-              selectedStaff === person
-                ? "border-stone-950 bg-stone-950 text-white"
-                : "border-stone-300 bg-white text-stone-800 hover:border-stone-500"
-            }`}
-          >
-            {person}
+      <div>
+        <form onSubmit={addStaffMember} className="mb-3 grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+          <input
+            value={newStaffName}
+            onChange={(event) => setNewStaffName(event.target.value)}
+            className="min-w-0 rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none focus:border-stone-700"
+            placeholder="新增人員"
+          />
+          <button type="submit" className="rounded-md bg-stone-900 px-3 py-2 text-sm font-semibold text-white">
+            新增
           </button>
-        ))}
+        </form>
+
+        <div className="grid gap-2">
+          {staff.map((person) => (
+            <div
+              key={person}
+              draggable
+              onDragStart={(event) => handleStaffDragStart(event, person)}
+              className={`grid grid-cols-[minmax(0,1fr)_28px] items-center rounded-md border transition ${
+                selectedStaff === person
+                  ? "border-stone-950 bg-stone-950 text-white"
+                  : "border-stone-300 bg-white text-stone-800 hover:border-stone-500"
+              }`}
+            >
+              <button type="button" onClick={() => setSelectedStaff(person)} className="min-w-0 px-3 py-2.5 text-left text-sm font-semibold">
+                {person}
+              </button>
+              <button
+                type="button"
+                onClick={() => removeStaffMember(person)}
+                className={`mr-1 h-6 w-6 rounded text-sm font-semibold ${
+                  selectedStaff === person ? "text-stone-300 hover:bg-stone-800 hover:text-white" : "text-stone-400 hover:bg-stone-100 hover:text-red-600"
+                }`}
+                aria-label={`移除 ${person}`}
+                title="從候選名單移除"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
 
   function AssignmentSlots({ date, time, activityId }) {
     return (
-      <div className="mt-3 grid grid-cols-2 gap-2 xl:grid-cols-4">
+      <div className="mt-3 grid grid-cols-2 gap-2 xl:grid-cols-5">
         {roleSlots.map((role) => {
           const slotKey = createSlotKey(date, time, activityId, role);
           const person = assignments[slotKey];
@@ -763,8 +860,14 @@ export default function ActivitySchedulerPrototype() {
     }
 
     return (
-      <div className="min-h-[112px] rounded-md border border-stone-300 bg-white p-3">
-        <div className="text-sm font-semibold leading-relaxed text-stone-950">{session.content}</div>
+      <div
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={(event) => handleDropToSession(event, date, time, activity.id)}
+        className="min-h-[112px] rounded-md border border-stone-300 bg-white p-3"
+      >
+        <button type="button" onClick={() => assignPersonToNextSlot(date, time, activity.id)} className="w-full text-left text-sm font-semibold leading-relaxed text-stone-950">
+          {session.content}
+        </button>
         <AssignmentSlots date={date} time={time} activityId={activity.id} />
       </div>
     );
@@ -881,7 +984,7 @@ export default function ActivitySchedulerPrototype() {
       <div className="min-h-screen lg:pl-64">
         <aside className="border-b border-stone-300 bg-stone-100 p-5 lg:fixed lg:inset-y-0 lg:left-0 lg:z-20 lg:w-64 lg:overflow-y-auto lg:border-b-0 lg:border-r">
           <h1 className="text-2xl font-bold">活動人力排班</h1>
-          <p className="mt-2 text-sm leading-6 text-stone-600">先選人，再點表格中的職務格。</p>
+          <p className="mt-2 text-sm leading-6 text-stone-600">拖曳人員到課程格，或先選人再點課程。</p>
 
           <div className="mt-5">
             <div className="mb-2 text-sm font-semibold">人員</div>
