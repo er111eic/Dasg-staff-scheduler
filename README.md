@@ -46,6 +46,12 @@ npm run build
 
 The included `vercel.json` stores these defaults.
 
+## Deploy With GitHub Pages
+
+GitHub Pages is configured through GitHub Actions:
+
+https://er111eic.github.io/Dasg-staff-scheduler/
+
 ## CI
 
 GitHub Actions runs `npm install` and `npm run build` on pushes and pull requests to `main`.
