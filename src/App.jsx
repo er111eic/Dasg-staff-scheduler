@@ -1,10 +1,19 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 const STORAGE_KEY = "activity-staff-scheduler:v1";
 const FIREBASE_CONFIG_KEY = "activity-staff-scheduler:firebase-config";
+const DEFAULT_FIREBASE_EVENT_ID = "current-event";
 const FIREBASE_SDK_VERSION = "12.7.0";
 const OCR_WORKFLOW_ENABLED = false;
 const TESSERACT_CDN = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+const DEFAULT_FIREBASE_CONFIG = {
+  apiKey: "AIzaSyALbqBVKXcsvntdrb0LX74yKKdGdluFnW4",
+  authDomain: "dasg-staff-scheduler.firebaseapp.com",
+  projectId: "dasg-staff-scheduler",
+  storageBucket: "dasg-staff-scheduler.firebasestorage.app",
+  messagingSenderId: "199735855413",
+  appId: "1:199735855413:web:d404700c17d07a7e6da47c",
+};
 
 const defaultStaff = ["思賢", "元妙", "旻恩", "崇萱", "詠禎", "嘉鴻"];
 
@@ -175,6 +184,10 @@ function normalizeImportedData(input) {
   };
 }
 
+function formatSyncTime(date = new Date()) {
+  return date.toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit" });
+}
+
 function loadTesseract() {
   if (window.Tesseract) return Promise.resolve(window.Tesseract);
 
@@ -253,7 +266,7 @@ ${ocrText}`;
 async function createFirebaseClient(config) {
   const appModule = await import(/* @vite-ignore */ `https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-app.js`);
   const firestoreModule = await import(/* @vite-ignore */ `https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-firestore.js`);
-  const app = appModule.initializeApp(config);
+  const app = appModule.getApps().length ? appModule.getApp() : appModule.initializeApp(config);
   const db = firestoreModule.getFirestore(app);
 
   return {
@@ -263,6 +276,7 @@ async function createFirebaseClient(config) {
     getDoc: firestoreModule.getDoc,
     setDoc: firestoreModule.setDoc,
     addDoc: firestoreModule.addDoc,
+    onSnapshot: firestoreModule.onSnapshot,
     serverTimestamp: firestoreModule.serverTimestamp,
   };
 }
@@ -284,10 +298,16 @@ export default function ActivitySchedulerPrototype() {
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiJson, setAiJson] = useState("");
   const [firebaseConfigText, setFirebaseConfigText] = useState("");
-  const [firebaseEventId, setFirebaseEventId] = useState("current-event");
+  const [firebaseEventId, setFirebaseEventId] = useState(DEFAULT_FIREBASE_EVENT_ID);
   const [firebaseMessage, setFirebaseMessage] = useState("");
   const [isFirebaseBusy, setIsFirebaseBusy] = useState(false);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
+  const [syncStatus, setSyncStatus] = useState("雲端同步準備中");
+  const [lastSyncedAt, setLastSyncedAt] = useState("");
+  const hasCloudLoadedRef = useRef(false);
+  const isApplyingCloudDataRef = useRef(false);
+  const lastCloudPayloadRef = useRef("");
+  const autoSaveTimerRef = useRef(null);
 
   useEffect(() => {
     const saved = window.localStorage.getItem(STORAGE_KEY);
@@ -313,8 +333,104 @@ export default function ActivitySchedulerPrototype() {
 
   useEffect(() => {
     const savedConfig = window.localStorage.getItem(FIREBASE_CONFIG_KEY);
-    if (savedConfig) setFirebaseConfigText(savedConfig);
+    setFirebaseConfigText(savedConfig || JSON.stringify(DEFAULT_FIREBASE_CONFIG, null, 2));
   }, []);
+
+  useEffect(() => {
+    if (!firebaseConfigText.trim()) return undefined;
+
+    let unsubscribe = null;
+    let cancelled = false;
+
+    async function subscribeToCloudEvent() {
+      setSyncStatus("雲端連線中");
+
+      try {
+        const config = parseFirebaseConfig(firebaseConfigText);
+        const firebase = await createFirebaseClient(config);
+        const eventId = firebaseEventId || DEFAULT_FIREBASE_EVENT_ID;
+        const eventRef = firebase.doc(firebase.db, "events", eventId);
+
+        unsubscribe = firebase.onSnapshot(
+          eventRef,
+          async (snapshot) => {
+            if (cancelled) return;
+
+            if (!snapshot.exists()) {
+              hasCloudLoadedRef.current = true;
+              setSyncStatus("建立雲端排班中");
+              await savePayloadToFirebase(firebase, currentPayload(), "已建立雲端排班");
+              return;
+            }
+
+            const normalized = normalizeImportedData(snapshot.data());
+            const cloudPayload = JSON.stringify(normalized);
+
+            hasCloudLoadedRef.current = true;
+
+            if (cloudPayload === lastCloudPayloadRef.current) {
+              setSyncStatus("已同步雲端");
+              setLastSyncedAt(formatSyncTime());
+              return;
+            }
+
+            isApplyingCloudDataRef.current = true;
+            lastCloudPayloadRef.current = cloudPayload;
+            setStaff(normalized.staff);
+            setSchedules(normalized.schedules);
+            setAssignments(normalized.assignments);
+            setRoleSlots(normalized.roleSlots);
+            setSelectedStaff("");
+            setSyncStatus("已同步雲端");
+            setLastSyncedAt(formatSyncTime());
+            window.setTimeout(() => {
+              isApplyingCloudDataRef.current = false;
+            }, 500);
+          },
+          (error) => {
+            if (!cancelled) setSyncStatus(`雲端同步失敗：${error.message}`);
+          },
+        );
+      } catch (error) {
+        if (!cancelled) setSyncStatus(`雲端設定錯誤：${error.message}`);
+      }
+    }
+
+    subscribeToCloudEvent();
+
+    return () => {
+      cancelled = true;
+      hasCloudLoadedRef.current = false;
+      if (unsubscribe) unsubscribe();
+    };
+  }, [firebaseConfigText, firebaseEventId]);
+
+  useEffect(() => {
+    if (!firebaseConfigText.trim() || !hasCloudLoadedRef.current || isApplyingCloudDataRef.current) return undefined;
+
+    const payload = currentPayload();
+    const payloadJson = JSON.stringify(payload);
+    if (payloadJson === lastCloudPayloadRef.current) return undefined;
+
+    setSyncStatus("有變更，準備儲存");
+    if (autoSaveTimerRef.current) window.clearTimeout(autoSaveTimerRef.current);
+
+    autoSaveTimerRef.current = window.setTimeout(async () => {
+      try {
+        setSyncStatus("雲端儲存中");
+        const config = parseFirebaseConfig(firebaseConfigText);
+        window.localStorage.setItem(FIREBASE_CONFIG_KEY, firebaseConfigText);
+        const firebase = await createFirebaseClient(config);
+        await savePayloadToFirebase(firebase, payload, "已自動儲存");
+      } catch (error) {
+        setSyncStatus(`自動儲存失敗：${error.message}`);
+      }
+    }, 900);
+
+    return () => {
+      if (autoSaveTimerRef.current) window.clearTimeout(autoSaveTimerRef.current);
+    };
+  }, [staff, schedules, assignments, roleSlots, firebaseConfigText, firebaseEventId]);
 
   useEffect(() => {
     return () => {
@@ -456,8 +572,8 @@ export default function ActivitySchedulerPrototype() {
     }
   }
 
-  function parseFirebaseConfig() {
-    const config = JSON.parse(firebaseConfigText);
+  function parseFirebaseConfig(text = firebaseConfigText) {
+    const config = JSON.parse(text);
     if (!config || typeof config !== "object") {
       throw new Error("Firebase config 必須是 JSON 物件。");
     }
@@ -471,6 +587,21 @@ export default function ActivitySchedulerPrototype() {
 
   function currentPayload() {
     return { staff, schedules, assignments, roleSlots };
+  }
+
+  async function savePayloadToFirebase(firebase, payload, successMessage) {
+    const eventRef = firebase.doc(firebase.db, "events", firebaseEventId || DEFAULT_FIREBASE_EVENT_ID);
+    await firebase.setDoc(
+      eventRef,
+      {
+        ...payload,
+        updatedAt: firebase.serverTimestamp(),
+      },
+      { merge: true },
+    );
+    lastCloudPayloadRef.current = JSON.stringify(payload);
+    setSyncStatus(successMessage);
+    setLastSyncedAt(formatSyncTime());
   }
 
   async function withFirebase(action) {
@@ -490,36 +621,31 @@ export default function ActivitySchedulerPrototype() {
   }
 
   function saveEventToFirebase() {
-    withFirebase(async ({ db, doc, setDoc, serverTimestamp }) => {
-      const eventRef = doc(db, "events", firebaseEventId || "current-event");
-      await setDoc(
-        eventRef,
-        {
-          ...currentPayload(),
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
-      setFirebaseMessage(`已儲存活動到 Firebase：events/${firebaseEventId || "current-event"}`);
+    withFirebase(async (firebase) => {
+      await savePayloadToFirebase(firebase, currentPayload(), "已手動儲存");
+      setFirebaseMessage(`已儲存活動到 Firebase：events/${firebaseEventId || DEFAULT_FIREBASE_EVENT_ID}`);
     });
   }
 
   function loadEventFromFirebase() {
     withFirebase(async ({ db, doc, getDoc }) => {
-      const eventRef = doc(db, "events", firebaseEventId || "current-event");
+      const eventRef = doc(db, "events", firebaseEventId || DEFAULT_FIREBASE_EVENT_ID);
       const snapshot = await getDoc(eventRef);
       if (!snapshot.exists()) {
-        setFirebaseMessage(`找不到 Firebase 活動：events/${firebaseEventId || "current-event"}`);
+        setFirebaseMessage(`找不到 Firebase 活動：events/${firebaseEventId || DEFAULT_FIREBASE_EVENT_ID}`);
         return;
       }
 
       const normalized = normalizeImportedData(snapshot.data());
+      lastCloudPayloadRef.current = JSON.stringify(normalized);
       setStaff(normalized.staff);
       setSchedules(normalized.schedules);
       setAssignments(normalized.assignments);
       setRoleSlots(normalized.roleSlots);
       setSelectedStaff("");
-      setFirebaseMessage(`已載入 Firebase 活動：events/${firebaseEventId || "current-event"}`);
+      setSyncStatus("已同步雲端");
+      setLastSyncedAt(formatSyncTime());
+      setFirebaseMessage(`已載入 Firebase 活動：events/${firebaseEventId || DEFAULT_FIREBASE_EVENT_ID}`);
     });
   }
 
@@ -767,6 +893,12 @@ export default function ActivitySchedulerPrototype() {
             <div className="mt-1 text-lg font-semibold">{selectedStaff || "尚未選擇"}</div>
           </div>
 
+          <div className="mt-3 rounded-md border border-stone-300 bg-white p-3 text-sm">
+            <div className="text-stone-500">同步狀態</div>
+            <div className="mt-1 font-semibold text-stone-900">{syncStatus}</div>
+            {lastSyncedAt && <div className="mt-1 text-xs text-stone-500">最後同步 {lastSyncedAt}</div>}
+          </div>
+
           <button
             type="button"
             onClick={() => setIsAdminOpen((open) => !open)}
@@ -784,8 +916,13 @@ export default function ActivitySchedulerPrototype() {
                 {schedules.length} 天活動，已安排 {assignedCount} 格
               </div>
             </div>
-            <div className="rounded-md border border-stone-300 bg-white px-3 py-2 text-sm">
-              目前選擇：<span className="font-semibold">{selectedStaff || "尚未選擇"}</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="rounded-md border border-stone-300 bg-white px-3 py-2 text-sm">
+                同步：<span className="font-semibold">{syncStatus}</span>
+              </div>
+              <div className="rounded-md border border-stone-300 bg-white px-3 py-2 text-sm">
+                目前選擇：<span className="font-semibold">{selectedStaff || "尚未選擇"}</span>
+              </div>
             </div>
           </div>
 
