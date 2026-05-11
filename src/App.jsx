@@ -178,6 +178,14 @@ function inferResponsibleDistrict(activity) {
   return "";
 }
 
+function normalizeActivityTitle(activity, fallbackTitle) {
+  const title = String(activity.title || activity.name || fallbackTitle);
+  const district = inferResponsibleDistrict(activity);
+
+  if (!district || title.includes(district)) return title;
+  return `${title}｜${district}`;
+}
+
 function normalizeImportedData(input) {
   if (!input || typeof input !== "object") {
     throw new Error("JSON 必須是物件。");
@@ -202,7 +210,7 @@ function normalizeImportedData(input) {
           .filter((activity) => activity.id !== "support" || (Array.isArray(activity.sessions) && activity.sessions.length > 0))
           .map((activity, activityIndex) => ({
             id: String(activity.id || `activity-${activityIndex + 1}`),
-            title: String(activity.title || activity.name || `活動 ${activityIndex + 1}`),
+            title: normalizeActivityTitle(activity, `活動 ${activityIndex + 1}`),
             responsibleDistrict: inferResponsibleDistrict(activity),
             fixed: Boolean(activity.fixed || activity.id === "dharma"),
             sessions: (Array.isArray(activity.sessions) ? activity.sessions : []).map((session) => ({
