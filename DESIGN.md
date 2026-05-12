@@ -1,6 +1,6 @@
 # Design System
 
-This interface follows a quiet productivity-tool style inspired by Apple, Notion, and Linear.
+This interface follows a quiet productivity-tool style inspired by Apple, Notion, Linear, and restrained Japanese stationery.
 
 ## Principles
 
@@ -9,14 +9,17 @@ This interface follows a quiet productivity-tool style inspired by Apple, Notion
 - Prefer thin borders, small radii, compact spacing, and stable dimensions.
 - Make active states obvious but restrained.
 - Keep mobile controls reachable without covering the schedule.
+- Cute details should stay tiny: paper texture, warm accents, and one or two symbolic marks only.
 
 ## Palette
 
-- Page: `#f7f7f5`
+- Page: `#fbfaf7`
 - Surface: `#ffffff`
-- Muted surface: `#f4f4f2`
-- Border: `#e7e5e4`
-- Strong border: `#d6d3d1`
+- Warm surface: `#fffdf8`
+- Muted surface: `#fff8ee`
+- Border: `#eadfd5`
+- Strong border: `#e4cbb9`
+- Accent: `#d98b75`
 - Text: `#1c1917`
 - Muted text: `#78716c`
 - Primary action: `#1c1917`
@@ -30,6 +33,7 @@ This interface follows a quiet productivity-tool style inspired by Apple, Notion
 - Schedule cells: white surface, thin border, subtle hover state.
 - Status panels: compact, two-column on mobile, stacked on desktop.
 - Admin tools: hidden by default and visually secondary.
+- Japanese accent layer: light paper-grid background, soft peach section headers, and a single flower mark in the app title.
 
 ## Mobile
 

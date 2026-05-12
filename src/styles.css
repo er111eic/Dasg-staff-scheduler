@@ -2,7 +2,7 @@
 
 :root {
   color: #1c1917;
-  background: #f7f7f5;
+  background: #fbfaf7;
   font-family:
     ui-sans-serif,
     system-ui,
@@ -14,7 +14,7 @@
 
 body {
   margin: 0;
-  background: #f7f7f5;
+  background: #fbfaf7;
 }
 
 button,
@@ -32,5 +32,41 @@ button:disabled {
 }
 
 ::selection {
-  background: #e7e5e4;
+  background: #f8dfcf;
+}
+
+.jp-page {
+  background-color: #fbfaf7;
+  background-image:
+    linear-gradient(rgba(214, 211, 209, 0.22) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(214, 211, 209, 0.18) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+.jp-sidebar {
+  background: rgba(255, 253, 248, 0.96);
+  backdrop-filter: blur(8px);
+}
+
+.jp-panel {
+  background: #fffaf2;
+}
+
+.jp-day-title {
+  background: #fffaf2;
+}
+
+.jp-day-title::before {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  margin-right: 0.5rem;
+  border: 1px solid #e7c7b0;
+  border-radius: 2px;
+  background: #f8dfcf;
+  content: "";
+}
+
+.jp-mark {
+  color: #d98b75;
 }

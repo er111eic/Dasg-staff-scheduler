@@ -809,10 +809,10 @@ export default function ActivitySchedulerPrototype() {
           <input
             value={newStaffName}
             onChange={(event) => setNewStaffName(event.target.value)}
-            className="min-w-0 rounded-md border border-stone-200 bg-white px-2.5 py-1.5 text-sm outline-none transition focus:border-stone-500 lg:px-3 lg:py-2"
+            className="min-w-0 rounded-md border border-[#eadfd5] bg-[#fffdf8] px-2.5 py-1.5 text-sm outline-none transition placeholder:text-stone-400 focus:border-[#d98b75] lg:px-3 lg:py-2"
             placeholder="新增人員"
           />
-          <button type="submit" className="rounded-md bg-stone-900 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-stone-800 lg:py-2">
+          <button type="submit" className="rounded-md bg-[#2f2a25] px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-[#453d35] lg:py-2">
             新增
           </button>
         </form>
@@ -825,8 +825,8 @@ export default function ActivitySchedulerPrototype() {
               onDragStart={(event) => handleStaffDragStart(event, person)}
               className={`grid flex-none grid-cols-[minmax(0,1fr)_24px] items-center rounded-md border transition lg:grid-cols-[minmax(0,1fr)_28px] ${
                 selectedStaff === person
-                  ? "border-stone-900 bg-stone-900 text-white"
-                  : "border-stone-200 bg-white text-stone-800 hover:border-stone-300 hover:bg-stone-50"
+                  ? "border-[#2f2a25] bg-[#2f2a25] text-white"
+                  : "border-[#eadfd5] bg-[#fffdf8] text-stone-800 hover:border-[#e4cbb9] hover:bg-[#fff8ee]"
               }`}
             >
               <button type="button" onClick={() => setSelectedStaff(person)} className="min-w-[4.75rem] px-3 py-2 text-left text-sm font-semibold lg:min-w-0 lg:py-2.5">
@@ -836,7 +836,7 @@ export default function ActivitySchedulerPrototype() {
                 type="button"
                 onClick={() => removeStaffMember(person)}
                 className={`mr-1 h-5 w-5 rounded text-sm font-semibold lg:h-6 lg:w-6 ${
-                  selectedStaff === person ? "text-stone-300 hover:bg-stone-800 hover:text-white" : "text-stone-400 hover:bg-stone-100 hover:text-red-600"
+                  selectedStaff === person ? "text-stone-300 hover:bg-[#453d35] hover:text-white" : "text-stone-400 hover:bg-[#fff2e7] hover:text-red-600"
                 }`}
                 aria-label={`移除 ${person}`}
                 title="從候選名單移除"
@@ -865,8 +865,8 @@ export default function ActivitySchedulerPrototype() {
                 conflict
                   ? "border-red-400 bg-red-50"
                   : person
-                    ? "border-stone-300 bg-stone-50"
-                    : "border-dashed border-stone-200 bg-white hover:border-stone-300 hover:bg-stone-50"
+                    ? "border-[#e4cbb9] bg-[#fff8ee]"
+                    : "border-dashed border-[#eadfd5] bg-[#fffdf8] hover:border-[#e4cbb9] hover:bg-[#fff8ee]"
               }`}
             >
               <button type="button" onClick={() => assignPerson(slotKey)} className="h-full min-h-[58px] w-full p-2 text-left">
@@ -880,7 +880,7 @@ export default function ActivitySchedulerPrototype() {
                 <button
                   type="button"
                   onClick={() => clearSlot(slotKey)}
-                  className="absolute right-1.5 top-1.5 h-5 w-5 rounded border border-stone-200 bg-white text-xs font-semibold leading-4 text-stone-500 transition hover:border-red-300 hover:text-red-600"
+                  className="absolute right-1.5 top-1.5 h-5 w-5 rounded border border-[#eadfd5] bg-white text-xs font-semibold leading-4 text-stone-500 transition hover:border-red-300 hover:text-red-600"
                   aria-label={`清除 ${role} 的 ${person}`}
                   title="清除這格人員"
                 >
@@ -896,14 +896,14 @@ export default function ActivitySchedulerPrototype() {
 
   function EventCell({ date, time, activity, session }) {
     if (!session) {
-      return <div className="min-h-[112px] rounded-md border border-stone-100 bg-stone-50 p-3 text-sm text-stone-400">—</div>;
+      return <div className="min-h-[112px] rounded-md border border-[#f0e8de] bg-[#fffdf8] p-3 text-sm text-stone-400">—</div>;
     }
 
     return (
       <div
         onDragOver={(event) => event.preventDefault()}
         onDrop={(event) => handleDropToSession(event, date, time, activity.id)}
-        className="min-h-[112px] rounded-md border border-stone-200 bg-white p-3 transition hover:border-stone-300"
+        className="min-h-[112px] rounded-md border border-[#eadfd5] bg-white p-3 transition hover:border-[#e4cbb9] hover:bg-[#fffdf8]"
       >
         <button type="button" onClick={() => assignPersonToNextSlot(date, time, activity.id)} className="w-full text-left text-sm font-semibold leading-relaxed text-stone-950">
           {session.content}
@@ -1020,10 +1020,13 @@ export default function ActivitySchedulerPrototype() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f7f7f5] text-stone-950">
+    <div className="jp-page min-h-screen text-stone-950">
       <div className="min-h-screen lg:pl-64">
-        <aside className="sticky top-0 z-30 max-h-[46vh] overflow-y-auto border-b border-stone-200 bg-white p-3 shadow-sm shadow-stone-200/60 lg:fixed lg:inset-y-0 lg:left-0 lg:z-20 lg:max-h-none lg:w-64 lg:border-b-0 lg:border-r lg:p-5 lg:shadow-none">
-          <h1 className="text-lg font-bold lg:text-2xl">活動人力排班</h1>
+        <aside className="jp-sidebar sticky top-0 z-30 max-h-[46vh] overflow-y-auto border-b border-[#eadfd5] p-3 shadow-sm shadow-stone-200/60 lg:fixed lg:inset-y-0 lg:left-0 lg:z-20 lg:max-h-none lg:w-64 lg:border-b-0 lg:border-r lg:p-5 lg:shadow-none">
+          <h1 className="flex items-center gap-2 text-lg font-bold lg:text-2xl">
+            <span className="jp-mark text-base" aria-hidden="true">✿</span>
+            活動人力排班
+          </h1>
           <p className="mt-1 text-xs leading-5 text-stone-600 lg:mt-2 lg:text-sm lg:leading-6">拖曳人員到課程格，或先選人再點課程。</p>
 
           <div className="mt-3 lg:mt-5">
@@ -1032,12 +1035,12 @@ export default function ActivitySchedulerPrototype() {
           </div>
 
           <div className="mt-2 grid grid-cols-2 gap-2 lg:mt-4 lg:block">
-            <div className="rounded-md border border-stone-200 bg-stone-50 p-2 text-xs lg:p-3 lg:text-sm">
+            <div className="jp-panel rounded-md border border-[#eadfd5] p-2 text-xs lg:p-3 lg:text-sm">
               <div className="text-stone-500">目前選擇</div>
               <div className="mt-1 truncate text-sm font-semibold lg:text-lg">{selectedStaff || "尚未選擇"}</div>
             </div>
 
-            <div className="rounded-md border border-stone-200 bg-stone-50 p-2 text-xs lg:mt-3 lg:p-3 lg:text-sm">
+            <div className="jp-panel rounded-md border border-[#eadfd5] p-2 text-xs lg:mt-3 lg:p-3 lg:text-sm">
               <div className="text-stone-500">同步狀態</div>
               <div className="mt-1 truncate font-semibold text-stone-900">{syncStatus}</div>
               {lastSyncedAt && <div className="mt-1 truncate text-xs text-stone-500">最後同步 {lastSyncedAt}</div>}
@@ -1047,7 +1050,7 @@ export default function ActivitySchedulerPrototype() {
           <button
             type="button"
             onClick={() => setIsAdminOpen((open) => !open)}
-            className="mt-3 w-full rounded-md border border-stone-200 bg-white px-3 py-1.5 text-sm font-semibold text-stone-700 transition hover:border-stone-300 hover:bg-stone-50 lg:mt-5 lg:py-2"
+            className="mt-3 w-full rounded-md border border-[#eadfd5] bg-[#fffdf8] px-3 py-1.5 text-sm font-semibold text-stone-700 transition hover:border-[#e4cbb9] hover:bg-[#fff8ee] lg:mt-5 lg:py-2"
           >
             {isAdminOpen ? "收合管理工具" : "管理工具"}
           </button>
@@ -1062,10 +1065,10 @@ export default function ActivitySchedulerPrototype() {
               </div>
             </div>
             <div className="hidden flex-wrap items-center gap-2 lg:flex">
-              <div className="rounded-md border border-stone-200 bg-white px-3 py-2 text-sm">
+              <div className="rounded-md border border-[#eadfd5] bg-[#fffdf8] px-3 py-2 text-sm">
                 同步：<span className="font-semibold">{syncStatus}</span>
               </div>
-              <div className="rounded-md border border-stone-200 bg-white px-3 py-2 text-sm">
+              <div className="rounded-md border border-[#eadfd5] bg-[#fffdf8] px-3 py-2 text-sm">
                 目前選擇：<span className="font-semibold">{selectedStaff || "尚未選擇"}</span>
               </div>
             </div>
@@ -1177,23 +1180,23 @@ export default function ActivitySchedulerPrototype() {
               const gridTemplateColumns = `120px minmax(320px, 1.2fr) repeat(${Math.max(activities.length - 1, 0)}, minmax(280px, 1fr))`;
 
               return (
-                <section key={day.date} className="overflow-x-auto rounded-md border border-stone-200 bg-white shadow-[0_1px_2px_rgba(28,25,23,0.04)]">
+                <section key={day.date} className="overflow-x-auto rounded-md border border-[#eadfd5] bg-white shadow-[0_1px_2px_rgba(80,60,40,0.05)]">
                   <div style={{ minWidth: `${120 + activities.length * 320}px` }}>
-                    <div className="border-b border-stone-100 px-4 py-3 text-lg font-bold">{day.date}</div>
-                    <div className="grid border-b border-stone-200 bg-stone-50 text-sm font-semibold text-stone-700" style={{ gridTemplateColumns }}>
-                      <div className="border-r border-stone-200 p-3">時段</div>
+                    <div className="jp-day-title border-b border-[#f0e8de] px-4 py-3 text-lg font-bold">{day.date}</div>
+                    <div className="grid border-b border-[#eadfd5] bg-[#fff8ee] text-sm font-semibold text-stone-700" style={{ gridTemplateColumns }}>
+                      <div className="border-r border-[#eadfd5] p-3">時段</div>
                       {activities.map((activity) => (
-                        <div key={activity.id} className="border-r border-stone-200 p-3 last:border-r-0">
+                        <div key={activity.id} className="border-r border-[#eadfd5] p-3 last:border-r-0">
                           {activity.title}
                         </div>
                       ))}
                     </div>
 
                     {times.map((time) => (
-                      <div key={`${day.date}__${time}`} className="grid border-b border-stone-100 last:border-b-0" style={{ gridTemplateColumns }}>
-                        <div className="border-r border-stone-100 bg-stone-50 p-3 text-sm font-semibold text-stone-700">{time}</div>
+                      <div key={`${day.date}__${time}`} className="grid border-b border-[#f3ece4] last:border-b-0" style={{ gridTemplateColumns }}>
+                        <div className="border-r border-[#f0e8de] bg-[#fffdf8] p-3 text-sm font-semibold text-stone-700">{time}</div>
                         {activities.map((activity) => (
-                          <div key={`${activity.id}__${time}`} className="border-r border-stone-100 p-3 last:border-r-0">
+                          <div key={`${activity.id}__${time}`} className="border-r border-[#f3ece4] bg-white/80 p-3 last:border-r-0">
                             <EventCell date={day.date} time={time} activity={activity} session={getSession(activity, time)} />
                           </div>
                         ))}
