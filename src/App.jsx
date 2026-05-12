@@ -805,37 +805,37 @@ export default function ActivitySchedulerPrototype() {
   function StaffPool() {
     return (
       <div>
-        <form onSubmit={addStaffMember} className="mb-3 grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+        <form onSubmit={addStaffMember} className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] gap-2 lg:mb-3">
           <input
             value={newStaffName}
             onChange={(event) => setNewStaffName(event.target.value)}
-            className="min-w-0 rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none focus:border-stone-700"
+            className="min-w-0 rounded-md border border-stone-300 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-stone-700 lg:px-3 lg:py-2"
             placeholder="新增人員"
           />
-          <button type="submit" className="rounded-md bg-stone-900 px-3 py-2 text-sm font-semibold text-white">
+          <button type="submit" className="rounded-md bg-stone-900 px-3 py-1.5 text-sm font-semibold text-white lg:py-2">
             新增
           </button>
         </form>
 
-        <div className="grid gap-2">
+        <div className="flex gap-2 overflow-x-auto pb-1 lg:grid lg:overflow-visible lg:pb-0">
           {staff.map((person) => (
             <div
               key={person}
               draggable
               onDragStart={(event) => handleStaffDragStart(event, person)}
-              className={`grid grid-cols-[minmax(0,1fr)_28px] items-center rounded-md border transition ${
+              className={`grid flex-none grid-cols-[minmax(0,1fr)_24px] items-center rounded-md border transition lg:grid-cols-[minmax(0,1fr)_28px] ${
                 selectedStaff === person
                   ? "border-stone-950 bg-stone-950 text-white"
                   : "border-stone-300 bg-white text-stone-800 hover:border-stone-500"
               }`}
             >
-              <button type="button" onClick={() => setSelectedStaff(person)} className="min-w-0 px-3 py-2.5 text-left text-sm font-semibold">
+              <button type="button" onClick={() => setSelectedStaff(person)} className="min-w-[4.75rem] px-3 py-2 text-left text-sm font-semibold lg:min-w-0 lg:py-2.5">
                 {person}
               </button>
               <button
                 type="button"
                 onClick={() => removeStaffMember(person)}
-                className={`mr-1 h-6 w-6 rounded text-sm font-semibold ${
+                className={`mr-1 h-5 w-5 rounded text-sm font-semibold lg:h-6 lg:w-6 ${
                   selectedStaff === person ? "text-stone-300 hover:bg-stone-800 hover:text-white" : "text-stone-400 hover:bg-stone-100 hover:text-red-600"
                 }`}
                 aria-label={`移除 ${person}`}
@@ -1022,30 +1022,32 @@ export default function ActivitySchedulerPrototype() {
   return (
     <div className="min-h-screen bg-stone-100 text-stone-950">
       <div className="min-h-screen lg:pl-64">
-        <aside className="border-b border-stone-300 bg-stone-100 p-5 lg:fixed lg:inset-y-0 lg:left-0 lg:z-20 lg:w-64 lg:overflow-y-auto lg:border-b-0 lg:border-r">
-          <h1 className="text-2xl font-bold">活動人力排班</h1>
-          <p className="mt-2 text-sm leading-6 text-stone-600">拖曳人員到課程格，或先選人再點課程。</p>
+        <aside className="sticky top-0 z-30 max-h-[46vh] overflow-y-auto border-b border-stone-300 bg-stone-100 p-3 shadow-sm lg:fixed lg:inset-y-0 lg:left-0 lg:z-20 lg:max-h-none lg:w-64 lg:border-b-0 lg:border-r lg:p-5 lg:shadow-none">
+          <h1 className="text-lg font-bold lg:text-2xl">活動人力排班</h1>
+          <p className="mt-1 text-xs leading-5 text-stone-600 lg:mt-2 lg:text-sm lg:leading-6">拖曳人員到課程格，或先選人再點課程。</p>
 
-          <div className="mt-5">
+          <div className="mt-3 lg:mt-5">
             <div className="mb-2 text-sm font-semibold">人員</div>
             <StaffPool />
           </div>
 
-          <div className="mt-4 rounded-md border border-stone-300 bg-white p-3 text-sm">
-            <div className="text-stone-500">目前選擇</div>
-            <div className="mt-1 text-lg font-semibold">{selectedStaff || "尚未選擇"}</div>
-          </div>
+          <div className="mt-2 grid grid-cols-2 gap-2 lg:mt-4 lg:block">
+            <div className="rounded-md border border-stone-300 bg-white p-2 text-xs lg:p-3 lg:text-sm">
+              <div className="text-stone-500">目前選擇</div>
+              <div className="mt-1 truncate text-sm font-semibold lg:text-lg">{selectedStaff || "尚未選擇"}</div>
+            </div>
 
-          <div className="mt-3 rounded-md border border-stone-300 bg-white p-3 text-sm">
-            <div className="text-stone-500">同步狀態</div>
-            <div className="mt-1 font-semibold text-stone-900">{syncStatus}</div>
-            {lastSyncedAt && <div className="mt-1 text-xs text-stone-500">最後同步 {lastSyncedAt}</div>}
+            <div className="rounded-md border border-stone-300 bg-white p-2 text-xs lg:mt-3 lg:p-3 lg:text-sm">
+              <div className="text-stone-500">同步狀態</div>
+              <div className="mt-1 truncate font-semibold text-stone-900">{syncStatus}</div>
+              {lastSyncedAt && <div className="mt-1 truncate text-xs text-stone-500">最後同步 {lastSyncedAt}</div>}
+            </div>
           </div>
 
           <button
             type="button"
             onClick={() => setIsAdminOpen((open) => !open)}
-            className="mt-5 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm font-semibold text-stone-700 hover:border-stone-500"
+            className="mt-3 w-full rounded-md border border-stone-300 bg-white px-3 py-1.5 text-sm font-semibold text-stone-700 hover:border-stone-500 lg:mt-5 lg:py-2"
           >
             {isAdminOpen ? "收合管理工具" : "管理工具"}
           </button>
@@ -1059,7 +1061,7 @@ export default function ActivitySchedulerPrototype() {
                 {schedules.length} 天活動，已安排 {assignedCount} 格
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="hidden flex-wrap items-center gap-2 lg:flex">
               <div className="rounded-md border border-stone-300 bg-white px-3 py-2 text-sm">
                 同步：<span className="font-semibold">{syncStatus}</span>
               </div>
