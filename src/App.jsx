@@ -809,10 +809,10 @@ export default function ActivitySchedulerPrototype() {
           <input
             value={newStaffName}
             onChange={(event) => setNewStaffName(event.target.value)}
-            className="min-w-0 rounded-md border border-stone-300 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-stone-700 lg:px-3 lg:py-2"
+            className="min-w-0 rounded-md border border-stone-200 bg-white px-2.5 py-1.5 text-sm outline-none transition focus:border-stone-500 lg:px-3 lg:py-2"
             placeholder="新增人員"
           />
-          <button type="submit" className="rounded-md bg-stone-900 px-3 py-1.5 text-sm font-semibold text-white lg:py-2">
+          <button type="submit" className="rounded-md bg-stone-900 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-stone-800 lg:py-2">
             新增
           </button>
         </form>
@@ -825,8 +825,8 @@ export default function ActivitySchedulerPrototype() {
               onDragStart={(event) => handleStaffDragStart(event, person)}
               className={`grid flex-none grid-cols-[minmax(0,1fr)_24px] items-center rounded-md border transition lg:grid-cols-[minmax(0,1fr)_28px] ${
                 selectedStaff === person
-                  ? "border-stone-950 bg-stone-950 text-white"
-                  : "border-stone-300 bg-white text-stone-800 hover:border-stone-500"
+                  ? "border-stone-900 bg-stone-900 text-white"
+                  : "border-stone-200 bg-white text-stone-800 hover:border-stone-300 hover:bg-stone-50"
               }`}
             >
               <button type="button" onClick={() => setSelectedStaff(person)} className="min-w-[4.75rem] px-3 py-2 text-left text-sm font-semibold lg:min-w-0 lg:py-2.5">
@@ -863,10 +863,10 @@ export default function ActivitySchedulerPrototype() {
               key={slotKey}
               className={`relative min-h-[58px] rounded-md border text-xs transition ${
                 conflict
-                  ? "border-red-500 bg-red-50"
+                  ? "border-red-400 bg-red-50"
                   : person
-                    ? "border-stone-500 bg-white"
-                    : "border-dashed border-stone-300 bg-stone-50 hover:border-stone-500 hover:bg-white"
+                    ? "border-stone-300 bg-stone-50"
+                    : "border-dashed border-stone-200 bg-white hover:border-stone-300 hover:bg-stone-50"
               }`}
             >
               <button type="button" onClick={() => assignPerson(slotKey)} className="h-full min-h-[58px] w-full p-2 text-left">
@@ -880,7 +880,7 @@ export default function ActivitySchedulerPrototype() {
                 <button
                   type="button"
                   onClick={() => clearSlot(slotKey)}
-                  className="absolute right-1.5 top-1.5 h-5 w-5 rounded border border-stone-300 bg-white text-xs font-semibold leading-4 text-stone-500 hover:border-red-400 hover:text-red-600"
+                  className="absolute right-1.5 top-1.5 h-5 w-5 rounded border border-stone-200 bg-white text-xs font-semibold leading-4 text-stone-500 transition hover:border-red-300 hover:text-red-600"
                   aria-label={`清除 ${role} 的 ${person}`}
                   title="清除這格人員"
                 >
@@ -896,14 +896,14 @@ export default function ActivitySchedulerPrototype() {
 
   function EventCell({ date, time, activity, session }) {
     if (!session) {
-      return <div className="min-h-[112px] rounded-md border border-stone-200 bg-stone-50 p-3 text-sm text-stone-400">—</div>;
+      return <div className="min-h-[112px] rounded-md border border-stone-100 bg-stone-50 p-3 text-sm text-stone-400">—</div>;
     }
 
     return (
       <div
         onDragOver={(event) => event.preventDefault()}
         onDrop={(event) => handleDropToSession(event, date, time, activity.id)}
-        className="min-h-[112px] rounded-md border border-stone-300 bg-white p-3"
+        className="min-h-[112px] rounded-md border border-stone-200 bg-white p-3 transition hover:border-stone-300"
       >
         <button type="button" onClick={() => assignPersonToNextSlot(date, time, activity.id)} className="w-full text-left text-sm font-semibold leading-relaxed text-stone-950">
           {session.content}
@@ -917,35 +917,35 @@ export default function ActivitySchedulerPrototype() {
     if (!isAdminOpen) return null;
 
     return (
-      <section className="mb-4 rounded-md border border-stone-300 bg-white">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 px-4 py-3">
+      <section className="mb-4 rounded-md border border-stone-200 bg-white">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-100 px-4 py-3">
           <h2 className="text-base font-semibold">管理工具</h2>
           <button
             type="button"
             onClick={() => setIsAdminOpen(false)}
-            className="rounded-md border border-stone-300 bg-white px-3 py-1.5 text-sm font-semibold text-stone-700 hover:border-stone-500"
+            className="rounded-md border border-stone-200 bg-white px-3 py-1.5 text-sm font-semibold text-stone-700 transition hover:border-stone-300 hover:bg-stone-50"
           >
             收合
           </button>
         </div>
 
         <div className="grid grid-cols-1 gap-4 p-4 xl:grid-cols-2">
-          <section className="rounded-md border border-stone-200 p-4">
+          <section className="rounded-md border border-stone-100 p-4">
             <h3 className="text-sm font-semibold">資料匯入</h3>
             <textarea
               value={jsonInput}
               onChange={(event) => setJsonInput(event.target.value)}
-              className="mt-3 h-36 w-full resize-y rounded-md border border-stone-300 bg-stone-50 p-3 font-mono text-xs outline-none focus:border-stone-700"
+              className="mt-3 h-36 w-full resize-y rounded-md border border-stone-200 bg-stone-50 p-3 font-mono text-xs outline-none focus:border-stone-500"
               placeholder='{"staff":[],"roleSlots":[],"schedules":[],"assignments":{}}'
             />
             <div className="mt-3 flex flex-wrap gap-2">
-              <button type="button" onClick={importJson} className="rounded-md bg-stone-950 px-3 py-2 text-sm font-semibold text-white">
+              <button type="button" onClick={importJson} className="rounded-md bg-stone-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-stone-800">
                 匯入 JSON
               </button>
               <button
                 type="button"
                 onClick={resetToDefault}
-                className="rounded-md border border-stone-300 bg-white px-3 py-2 text-sm font-semibold text-stone-800 hover:border-stone-500"
+                className="rounded-md border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-stone-800 transition hover:border-stone-300 hover:bg-stone-50"
               >
                 還原預設
               </button>
@@ -953,18 +953,18 @@ export default function ActivitySchedulerPrototype() {
             {importMessage && <div className="mt-2 text-xs leading-5 text-stone-600">{importMessage}</div>}
           </section>
 
-          <section className="rounded-md border border-stone-200 p-4">
+          <section className="rounded-md border border-stone-100 p-4">
             <h3 className="text-sm font-semibold">資料匯出</h3>
-            <textarea readOnly value={exportJson} className="mt-3 h-36 w-full resize-y rounded-md border border-stone-300 bg-stone-50 p-3 font-mono text-xs" />
+            <textarea readOnly value={exportJson} className="mt-3 h-36 w-full resize-y rounded-md border border-stone-200 bg-stone-50 p-3 font-mono text-xs" />
             <div className="mt-3 grid grid-cols-2 gap-2 text-sm text-stone-700">
-              <div className="rounded-md border border-stone-200 p-2">人員：{staff.length}</div>
-              <div className="rounded-md border border-stone-200 p-2">職務：{roleSlots.length}</div>
-              <div className="rounded-md border border-stone-200 p-2">日期：{schedules.length}</div>
-              <div className="rounded-md border border-stone-200 p-2">已排：{assignedCount}</div>
+              <div className="rounded-md border border-stone-100 bg-stone-50 p-2">人員：{staff.length}</div>
+              <div className="rounded-md border border-stone-100 bg-stone-50 p-2">職務：{roleSlots.length}</div>
+              <div className="rounded-md border border-stone-100 bg-stone-50 p-2">日期：{schedules.length}</div>
+              <div className="rounded-md border border-stone-100 bg-stone-50 p-2">已排：{assignedCount}</div>
             </div>
           </section>
 
-          <section className="rounded-md border border-stone-200 p-4 xl:col-span-2">
+          <section className="rounded-md border border-stone-100 p-4 xl:col-span-2">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h3 className="text-sm font-semibold">Firebase 儲存</h3>
               {firebaseMessage && <div className="text-sm text-stone-600">{firebaseMessage}</div>}
@@ -979,7 +979,7 @@ export default function ActivitySchedulerPrototype() {
                   id="firebase-config"
                   value={firebaseConfigText}
                   onChange={(event) => setFirebaseConfigText(event.target.value)}
-                  className="mt-2 h-32 w-full resize-y rounded-md border border-stone-300 bg-stone-50 p-3 font-mono text-xs outline-none focus:border-stone-700"
+                  className="mt-2 h-32 w-full resize-y rounded-md border border-stone-200 bg-stone-50 p-3 font-mono text-xs outline-none focus:border-stone-500"
                   placeholder='{"apiKey":"","authDomain":"","projectId":"","storageBucket":"","messagingSenderId":"","appId":""}'
                 />
               </div>
@@ -992,22 +992,22 @@ export default function ActivitySchedulerPrototype() {
                   id="firebase-event-id"
                   value={firebaseEventId}
                   onChange={(event) => setFirebaseEventId(event.target.value)}
-                  className="mt-2 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none focus:border-stone-700"
+                  className="mt-2 w-full rounded-md border border-stone-200 bg-white px-3 py-2 text-sm outline-none focus:border-stone-500"
                 />
                 <div className="mt-3 grid grid-cols-2 gap-2">
-                  <button type="button" onClick={loadEventFromFirebase} disabled={isFirebaseBusy} className="rounded-md border border-stone-300 bg-white px-3 py-2 text-sm font-semibold text-stone-800 disabled:text-stone-400">
+                  <button type="button" onClick={loadEventFromFirebase} disabled={isFirebaseBusy} className="rounded-md border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-stone-800 transition hover:border-stone-300 hover:bg-stone-50 disabled:text-stone-400">
                     載入
                   </button>
-                  <button type="button" onClick={saveEventToFirebase} disabled={isFirebaseBusy} className="rounded-md bg-stone-950 px-3 py-2 text-sm font-semibold text-white disabled:bg-stone-400">
+                  <button type="button" onClick={saveEventToFirebase} disabled={isFirebaseBusy} className="rounded-md bg-stone-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-stone-800 disabled:bg-stone-400">
                     儲存
                   </button>
-                  <button type="button" onClick={saveTemplateToFirebase} disabled={isFirebaseBusy} className="rounded-md border border-stone-300 bg-white px-3 py-2 text-sm font-semibold text-stone-800 disabled:text-stone-400">
+                  <button type="button" onClick={saveTemplateToFirebase} disabled={isFirebaseBusy} className="rounded-md border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-stone-800 transition hover:border-stone-300 hover:bg-stone-50 disabled:text-stone-400">
                     存模板
                   </button>
-                  <button type="button" onClick={saveStaffListToFirebase} disabled={isFirebaseBusy} className="rounded-md border border-stone-300 bg-white px-3 py-2 text-sm font-semibold text-stone-800 disabled:text-stone-400">
+                  <button type="button" onClick={saveStaffListToFirebase} disabled={isFirebaseBusy} className="rounded-md border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-stone-800 transition hover:border-stone-300 hover:bg-stone-50 disabled:text-stone-400">
                     存人員
                   </button>
-                  <button type="button" onClick={saveHistoryToFirebase} disabled={isFirebaseBusy} className="col-span-2 rounded-md border border-stone-300 bg-white px-3 py-2 text-sm font-semibold text-stone-800 disabled:text-stone-400">
+                  <button type="button" onClick={saveHistoryToFirebase} disabled={isFirebaseBusy} className="col-span-2 rounded-md border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-stone-800 transition hover:border-stone-300 hover:bg-stone-50 disabled:text-stone-400">
                     建立歷史排班
                   </button>
                 </div>
@@ -1020,9 +1020,9 @@ export default function ActivitySchedulerPrototype() {
   }
 
   return (
-    <div className="min-h-screen bg-stone-100 text-stone-950">
+    <div className="min-h-screen bg-[#f7f7f5] text-stone-950">
       <div className="min-h-screen lg:pl-64">
-        <aside className="sticky top-0 z-30 max-h-[46vh] overflow-y-auto border-b border-stone-300 bg-stone-100 p-3 shadow-sm lg:fixed lg:inset-y-0 lg:left-0 lg:z-20 lg:max-h-none lg:w-64 lg:border-b-0 lg:border-r lg:p-5 lg:shadow-none">
+        <aside className="sticky top-0 z-30 max-h-[46vh] overflow-y-auto border-b border-stone-200 bg-white p-3 shadow-sm shadow-stone-200/60 lg:fixed lg:inset-y-0 lg:left-0 lg:z-20 lg:max-h-none lg:w-64 lg:border-b-0 lg:border-r lg:p-5 lg:shadow-none">
           <h1 className="text-lg font-bold lg:text-2xl">活動人力排班</h1>
           <p className="mt-1 text-xs leading-5 text-stone-600 lg:mt-2 lg:text-sm lg:leading-6">拖曳人員到課程格，或先選人再點課程。</p>
 
@@ -1032,12 +1032,12 @@ export default function ActivitySchedulerPrototype() {
           </div>
 
           <div className="mt-2 grid grid-cols-2 gap-2 lg:mt-4 lg:block">
-            <div className="rounded-md border border-stone-300 bg-white p-2 text-xs lg:p-3 lg:text-sm">
+            <div className="rounded-md border border-stone-200 bg-stone-50 p-2 text-xs lg:p-3 lg:text-sm">
               <div className="text-stone-500">目前選擇</div>
               <div className="mt-1 truncate text-sm font-semibold lg:text-lg">{selectedStaff || "尚未選擇"}</div>
             </div>
 
-            <div className="rounded-md border border-stone-300 bg-white p-2 text-xs lg:mt-3 lg:p-3 lg:text-sm">
+            <div className="rounded-md border border-stone-200 bg-stone-50 p-2 text-xs lg:mt-3 lg:p-3 lg:text-sm">
               <div className="text-stone-500">同步狀態</div>
               <div className="mt-1 truncate font-semibold text-stone-900">{syncStatus}</div>
               {lastSyncedAt && <div className="mt-1 truncate text-xs text-stone-500">最後同步 {lastSyncedAt}</div>}
@@ -1047,7 +1047,7 @@ export default function ActivitySchedulerPrototype() {
           <button
             type="button"
             onClick={() => setIsAdminOpen((open) => !open)}
-            className="mt-3 w-full rounded-md border border-stone-300 bg-white px-3 py-1.5 text-sm font-semibold text-stone-700 hover:border-stone-500 lg:mt-5 lg:py-2"
+            className="mt-3 w-full rounded-md border border-stone-200 bg-white px-3 py-1.5 text-sm font-semibold text-stone-700 transition hover:border-stone-300 hover:bg-stone-50 lg:mt-5 lg:py-2"
           >
             {isAdminOpen ? "收合管理工具" : "管理工具"}
           </button>
@@ -1062,10 +1062,10 @@ export default function ActivitySchedulerPrototype() {
               </div>
             </div>
             <div className="hidden flex-wrap items-center gap-2 lg:flex">
-              <div className="rounded-md border border-stone-300 bg-white px-3 py-2 text-sm">
+              <div className="rounded-md border border-stone-200 bg-white px-3 py-2 text-sm">
                 同步：<span className="font-semibold">{syncStatus}</span>
               </div>
-              <div className="rounded-md border border-stone-300 bg-white px-3 py-2 text-sm">
+              <div className="rounded-md border border-stone-200 bg-white px-3 py-2 text-sm">
                 目前選擇：<span className="font-semibold">{selectedStaff || "尚未選擇"}</span>
               </div>
             </div>
@@ -1177,23 +1177,23 @@ export default function ActivitySchedulerPrototype() {
               const gridTemplateColumns = `120px minmax(320px, 1.2fr) repeat(${Math.max(activities.length - 1, 0)}, minmax(280px, 1fr))`;
 
               return (
-                <section key={day.date} className="overflow-x-auto rounded-md border border-stone-300 bg-white">
+                <section key={day.date} className="overflow-x-auto rounded-md border border-stone-200 bg-white shadow-[0_1px_2px_rgba(28,25,23,0.04)]">
                   <div style={{ minWidth: `${120 + activities.length * 320}px` }}>
-                    <div className="border-b border-stone-300 px-4 py-3 text-lg font-bold">{day.date}</div>
-                    <div className="grid border-b border-stone-300 bg-stone-900 text-sm font-semibold text-white" style={{ gridTemplateColumns }}>
-                      <div className="p-3">時段</div>
+                    <div className="border-b border-stone-100 px-4 py-3 text-lg font-bold">{day.date}</div>
+                    <div className="grid border-b border-stone-200 bg-stone-50 text-sm font-semibold text-stone-700" style={{ gridTemplateColumns }}>
+                      <div className="border-r border-stone-200 p-3">時段</div>
                       {activities.map((activity) => (
-                        <div key={activity.id} className="p-3">
+                        <div key={activity.id} className="border-r border-stone-200 p-3 last:border-r-0">
                           {activity.title}
                         </div>
                       ))}
                     </div>
 
                     {times.map((time) => (
-                      <div key={`${day.date}__${time}`} className="grid border-b border-stone-200 last:border-b-0" style={{ gridTemplateColumns }}>
-                        <div className="bg-stone-50 p-3 text-sm font-semibold text-stone-800">{time}</div>
+                      <div key={`${day.date}__${time}`} className="grid border-b border-stone-100 last:border-b-0" style={{ gridTemplateColumns }}>
+                        <div className="border-r border-stone-100 bg-stone-50 p-3 text-sm font-semibold text-stone-700">{time}</div>
                         {activities.map((activity) => (
-                          <div key={`${activity.id}__${time}`} className="p-3">
+                          <div key={`${activity.id}__${time}`} className="border-r border-stone-100 p-3 last:border-r-0">
                             <EventCell date={day.date} time={time} activity={activity} session={getSession(activity, time)} />
                           </div>
                         ))}
