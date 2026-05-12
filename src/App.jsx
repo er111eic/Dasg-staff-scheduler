@@ -702,14 +702,10 @@ export default function ActivitySchedulerPrototype() {
 
   async function savePayloadToFirebase(firebase, payload, successMessage) {
     const eventRef = firebase.doc(firebase.db, "events", firebaseEventId || DEFAULT_FIREBASE_EVENT_ID);
-    await firebase.setDoc(
-      eventRef,
-      {
-        ...payload,
-        updatedAt: firebase.serverTimestamp(),
-      },
-      { merge: true },
-    );
+    await firebase.setDoc(eventRef, {
+      ...payload,
+      updatedAt: firebase.serverTimestamp(),
+    });
     lastCloudPayloadRef.current = JSON.stringify(payload);
     setSyncStatus(successMessage);
     setLastSyncedAt(formatSyncTime());
