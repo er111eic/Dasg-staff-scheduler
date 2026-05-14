@@ -346,6 +346,7 @@ export default function ActivitySchedulerPrototype() {
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [syncStatus, setSyncStatus] = useState("雲端同步準備中");
   const [lastSyncedAt, setLastSyncedAt] = useState("");
+  const [imageExportMessage, setImageExportMessage] = useState("");
   const hasCloudLoadedRef = useRef(false);
   const isApplyingCloudDataRef = useRef(false);
   const lastCloudPayloadRef = useRef("");
@@ -584,6 +585,163 @@ export default function ActivitySchedulerPrototype() {
     if (!person) return false;
     const [date, time] = slotKey.split("__");
     return conflicts[`${date}__${time}__${person}`] > 1;
+  }
+
+  function wrapCanvasText(ctx, text, maxWidth) {
+    const value = String(text || "");
+    const lines = [];
+    let line = "";
+
+    Array.from(value).forEach((char) => {
+      const candidate = `${line}${char}`;
+      if (ctx.measureText(candidate).width > maxWidth && line) {
+        lines.push(line);
+        line = char.trimStart();
+      } else {
+        line = candidate;
+      }
+    });
+
+    if (line) lines.push(line);
+    return lines.length ? lines : [""];
+  }
+
+  function downloadScheduleImage() {
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      setImageExportMessage("此瀏覽器無法建立圖片，請改用桌機或更新瀏覽器。");
+      return;
+    }
+    const width = 1440;
+    const margin = 48;
+    const colGap = 20;
+    const colWidths = [140, 220, 520, 420];
+    const lineHeight = 26;
+    const rows = [];
+
+    schedules.forEach((day) => {
+      rows.push({ type: "day", date: day.date });
+      const activities = orderActivities(day.activities);
+      getTimesForDay(day).forEach((time) => {
+        activities.forEach((activity) => {
+          const session = getSession(activity, time);
+          if (!session) return;
+
+          const people =
+            roleSlots
+              .map((role) => {
+                const person = assignments[createSlotKey(day.date, time, activity.id, role)];
+                return person ? `${role}：${person}` : "";
+              })
+              .filter(Boolean)
+              .join(" / ") || "未安排";
+
+          rows.push({
+            type: "slot",
+            time,
+            activity: activity.title,
+            content: session.content,
+            people,
+            selected: Boolean(selectedStaff && people.includes(`：${selectedStaff}`)),
+          });
+        });
+      });
+    });
+
+    ctx.font = "22px -apple-system, BlinkMacSystemFont, 'Noto Sans TC', sans-serif";
+    const measuredRows = rows.map((row) => {
+      if (row.type === "day") return { ...row, height: 58 };
+
+      const contentLines = wrapCanvasText(ctx, row.content, colWidths[2]);
+      const peopleLines = wrapCanvasText(ctx, row.people, colWidths[3]);
+      const height = Math.max(72, Math.max(contentLines.length, peopleLines.length) * lineHeight + 28);
+      return { ...row, contentLines, peopleLines, height };
+    });
+
+    const height = 132 + measuredRows.reduce((sum, row) => sum + row.height, 0) + 56;
+    canvas.width = width;
+    canvas.height = height;
+
+    ctx.fillStyle = "#fbfaf7";
+    ctx.fillRect(0, 0, width, height);
+    ctx.strokeStyle = "rgba(214, 211, 209, 0.28)";
+    for (let x = 0; x < width; x += 28) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, height);
+      ctx.stroke();
+    }
+    for (let y = 0; y < height; y += 28) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(width, y);
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = "#1c1917";
+    ctx.font = "700 36px -apple-system, BlinkMacSystemFont, 'Noto Sans TC', sans-serif";
+    ctx.fillText("活動人力排班", margin, 58);
+    ctx.font = "20px -apple-system, BlinkMacSystemFont, 'Noto Sans TC', sans-serif";
+    ctx.fillStyle = "#78716c";
+    ctx.fillText(`${schedules.length} 天活動｜已安排 ${assignedCount} 格｜輸出 ${formatSyncTime()}`, margin, 92);
+    if (selectedStaff) {
+      ctx.fillStyle = "#d98b75";
+      ctx.fillText(`目前標注：${selectedStaff}`, margin + 530, 92);
+    }
+
+    const colX = [
+      margin,
+      margin + colWidths[0] + colGap,
+      margin + colWidths[0] + colWidths[1] + colGap * 2,
+      margin + colWidths[0] + colWidths[1] + colWidths[2] + colGap * 3,
+    ];
+    let y = 132;
+
+    measuredRows.forEach((row) => {
+      if (row.type === "day") {
+        ctx.fillStyle = "#fffaf2";
+        ctx.fillRect(margin - 14, y, width - margin * 2 + 28, row.height);
+        ctx.strokeStyle = "#eadfd5";
+        ctx.strokeRect(margin - 14, y, width - margin * 2 + 28, row.height);
+        ctx.fillStyle = "#1c1917";
+        ctx.font = "700 24px -apple-system, BlinkMacSystemFont, 'Noto Sans TC', sans-serif";
+        ctx.fillText(row.date, margin, y + 38);
+        y += row.height;
+        return;
+      }
+
+      ctx.fillStyle = row.selected ? "#fff1e6" : "rgba(255, 255, 255, 0.92)";
+      ctx.fillRect(margin - 14, y, width - margin * 2 + 28, row.height);
+      ctx.strokeStyle = row.selected ? "#d98b75" : "#f0e8de";
+      ctx.strokeRect(margin - 14, y, width - margin * 2 + 28, row.height);
+
+      ctx.fillStyle = "#44403c";
+      ctx.font = "700 20px -apple-system, BlinkMacSystemFont, 'Noto Sans TC', sans-serif";
+      ctx.fillText(row.time, colX[0], y + 32);
+      ctx.fillText(row.activity, colX[1], y + 32);
+
+      ctx.font = "20px -apple-system, BlinkMacSystemFont, 'Noto Sans TC', sans-serif";
+      ctx.fillStyle = "#1c1917";
+      row.contentLines.forEach((line, index) => {
+        ctx.fillText(line, colX[2], y + 30 + index * lineHeight);
+      });
+
+      ctx.fillStyle = row.selected ? "#b35f4d" : "#57534e";
+      row.peopleLines.forEach((line, index) => {
+        ctx.fillText(line, colX[3], y + 30 + index * lineHeight);
+      });
+
+      y += row.height;
+    });
+
+    const link = document.createElement("a");
+    link.download = `activity-staff-scheduler-${new Date().toISOString().slice(0, 10)}.png`;
+    link.href = canvas.toDataURL("image/png");
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setImageExportMessage("已輸出 PNG，可傳到 LINE 查看。");
   }
 
   function importJson() {
@@ -857,13 +1015,18 @@ export default function ActivitySchedulerPrototype() {
           const slotKey = createSlotKey(date, time, activityId, role);
           const person = assignments[slotKey];
           const conflict = isConflict(slotKey, person);
+          const isSelectedPerson = Boolean(selectedStaff && person === selectedStaff);
 
           return (
             <div
               key={slotKey}
               className={`relative min-h-[58px] rounded-md border text-xs transition ${
-                conflict
-                  ? "border-red-400 bg-red-50"
+                isSelectedPerson
+                  ? conflict
+                    ? "border-red-400 bg-red-50 shadow-[inset_0_0_0_1px_#d98b75]"
+                    : "border-[#d98b75] bg-[#fff1e6] shadow-[inset_0_0_0_1px_#d98b75]"
+                  : conflict
+                    ? "border-red-400 bg-red-50"
                   : person
                     ? "border-[#e4cbb9] bg-[#fff8ee]"
                     : "border-dashed border-[#eadfd5] bg-[#fffdf8] hover:border-[#e4cbb9] hover:bg-[#fff8ee]"
@@ -1063,7 +1226,15 @@ export default function ActivitySchedulerPrototype() {
               <div className="mt-1 text-sm text-stone-600">
                 {schedules.length} 天活動，已安排 {assignedCount} 格
               </div>
+              {imageExportMessage && <div className="mt-1 text-xs text-stone-500">{imageExportMessage}</div>}
             </div>
+            <button
+              type="button"
+              onClick={downloadScheduleImage}
+              className="rounded-md border border-[#e4cbb9] bg-[#fffdf8] px-3 py-2 text-sm font-semibold text-stone-800 transition hover:bg-[#fff8ee]"
+            >
+              輸出排班圖
+            </button>
             <div className="hidden flex-wrap items-center gap-2 lg:flex">
               <div className="rounded-md border border-[#eadfd5] bg-[#fffdf8] px-3 py-2 text-sm">
                 同步：<span className="font-semibold">{syncStatus}</span>
