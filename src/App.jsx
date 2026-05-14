@@ -347,6 +347,8 @@ export default function ActivitySchedulerPrototype() {
   const [syncStatus, setSyncStatus] = useState("雲端同步準備中");
   const [lastSyncedAt, setLastSyncedAt] = useState("");
   const [imageExportMessage, setImageExportMessage] = useState("");
+  const [undoCount, setUndoCount] = useState(0);
+  const [undoMessage, setUndoMessage] = useState("");
   const hasCloudLoadedRef = useRef(false);
   const isApplyingCloudDataRef = useRef(false);
   const lastCloudPayloadRef = useRef("");
@@ -354,6 +356,7 @@ export default function ActivitySchedulerPrototype() {
   const firebaseClientRef = useRef(null);
   const localChangeSerialRef = useRef(0);
   const savedChangeSerialRef = useRef(0);
+  const undoStackRef = useRef([]);
 
   useEffect(() => {
     const saved = window.localStorage.getItem(STORAGE_KEY);
@@ -432,6 +435,9 @@ export default function ActivitySchedulerPrototype() {
             setAssignments(normalized.assignments);
             setRoleSlots(normalized.roleSlots);
             setSelectedStaff("");
+            undoStackRef.current = [];
+            setUndoCount(0);
+            setUndoMessage("");
             setSyncStatus("已同步雲端");
             setLastSyncedAt(formatSyncTime());
             window.setTimeout(() => {
@@ -523,8 +529,37 @@ export default function ActivitySchedulerPrototype() {
     localChangeSerialRef.current += 1;
   }
 
+  function pushUndoSnapshot(message = "已記錄上一步") {
+    undoStackRef.current = [
+      ...undoStackRef.current,
+      {
+        payload: JSON.parse(JSON.stringify(currentPayload())),
+        selectedStaff,
+      },
+    ].slice(-30);
+    setUndoCount(undoStackRef.current.length);
+    setUndoMessage(message);
+  }
+
+  function undoLastChange() {
+    const previous = undoStackRef.current.at(-1);
+    if (!previous) return;
+
+    undoStackRef.current = undoStackRef.current.slice(0, -1);
+    setUndoCount(undoStackRef.current.length);
+    markLocalChange();
+    setStaff(previous.payload.staff);
+    setSchedules(previous.payload.schedules);
+    setAssignments(previous.payload.assignments);
+    setRoleSlots(previous.payload.roleSlots);
+    setSelectedStaff(previous.selectedStaff || "");
+    setUndoMessage("已回到上一步。");
+  }
+
   function assignPerson(slotKey, person = selectedStaff) {
     if (!person) return;
+    if (assignments[slotKey] === person) return;
+    pushUndoSnapshot("已記錄排班前狀態。");
     markLocalChange();
     setAssignments((prev) => ({ ...prev, [slotKey]: person }));
   }
@@ -532,6 +567,7 @@ export default function ActivitySchedulerPrototype() {
   function assignPersonToNextSlot(date, time, activityId, person = selectedStaff) {
     if (!person) return;
 
+    pushUndoSnapshot("已記錄排班前狀態。");
     markLocalChange();
     setAssignments((prev) => {
       const next = { ...prev };
@@ -542,6 +578,8 @@ export default function ActivitySchedulerPrototype() {
   }
 
   function clearSlot(slotKey) {
+    if (!assignments[slotKey]) return;
+    pushUndoSnapshot("已記錄清除前狀態。");
     markLocalChange();
     setAssignments((prev) => {
       const next = { ...prev };
@@ -555,13 +593,22 @@ export default function ActivitySchedulerPrototype() {
     const name = newStaffName.trim();
     if (!name) return;
 
+    if (staff.includes(name)) {
+      setSelectedStaff(name);
+      setNewStaffName("");
+      return;
+    }
+
+    pushUndoSnapshot("已記錄新增前狀態。");
     markLocalChange();
-    setStaff((prev) => (prev.includes(name) ? prev : [...prev, name]));
+    setStaff((prev) => [...prev, name]);
     setSelectedStaff(name);
     setNewStaffName("");
   }
 
   function removeStaffMember(person) {
+    if (!staff.includes(person)) return;
+    pushUndoSnapshot(`已記錄刪除 ${person} 前狀態。`);
     markLocalChange();
     setStaff((prev) => prev.filter((name) => name !== person));
     setAssignments((prev) =>
@@ -748,6 +795,7 @@ export default function ActivitySchedulerPrototype() {
     try {
       const parsed = JSON.parse(jsonInput);
       const normalized = normalizeImportedData(parsed);
+      pushUndoSnapshot("已記錄匯入前狀態。");
       markLocalChange();
       setStaff(normalized.staff);
       setSchedules(normalized.schedules);
@@ -827,6 +875,7 @@ export default function ActivitySchedulerPrototype() {
     try {
       const parsed = extractJsonFromText(aiJson);
       const normalized = normalizeImportedData(parsed);
+      pushUndoSnapshot("已記錄 AI JSON 匯入前狀態。");
       markLocalChange();
       setStaff(normalized.staff);
       setSchedules(normalized.schedules);
@@ -905,6 +954,9 @@ export default function ActivitySchedulerPrototype() {
       if (autoSaveTimerRef.current) window.clearTimeout(autoSaveTimerRef.current);
       lastCloudPayloadRef.current = JSON.stringify(normalized);
       savedChangeSerialRef.current = localChangeSerialRef.current;
+      undoStackRef.current = [];
+      setUndoCount(0);
+      setUndoMessage("");
       setStaff(normalized.staff);
       setSchedules(normalized.schedules);
       setAssignments(normalized.assignments);
@@ -951,6 +1003,7 @@ export default function ActivitySchedulerPrototype() {
   }
 
   function resetToDefault() {
+    pushUndoSnapshot("已記錄還原前狀態。");
     markLocalChange();
     setStaff(defaultStaff);
     setSchedules(defaultSchedules);
@@ -1209,6 +1262,16 @@ export default function ActivitySchedulerPrototype() {
               {lastSyncedAt && <div className="mt-1 truncate text-xs text-stone-500">最後同步 {lastSyncedAt}</div>}
             </div>
           </div>
+
+          <button
+            type="button"
+            onClick={undoLastChange}
+            disabled={undoCount === 0}
+            className="mt-3 w-full rounded-md border border-[#eadfd5] bg-[#fffdf8] px-3 py-1.5 text-sm font-semibold text-stone-700 transition hover:border-[#e4cbb9] hover:bg-[#fff8ee] disabled:text-stone-300 disabled:hover:border-[#eadfd5] disabled:hover:bg-[#fffdf8] lg:py-2"
+          >
+            回到上一步{undoCount > 0 ? `（${undoCount}）` : ""}
+          </button>
+          {undoMessage && <div className="mt-1 text-xs leading-5 text-stone-500">{undoMessage}</div>}
 
           <button
             type="button"
