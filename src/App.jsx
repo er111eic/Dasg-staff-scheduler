@@ -662,27 +662,25 @@ export default function ActivitySchedulerPrototype() {
     }
     const width = 1440;
     const margin = 48;
-    const colGap = 20;
-    const colWidths = [140, 220, 520, 420];
+    const colGap = 18;
+    const colWidths = [140, 210, 480, 460];
     const lineHeight = 26;
     const rows = [];
 
-    schedules.forEach((day) => {
-      rows.push({ type: "day", date: day.date });
+    schedules.forEach((day, dayIndex) => {
+      rows.push({ type: "day", date: day.date, topGap: dayIndex > 0 ? 20 : 0 });
       const activities = orderActivities(day.activities);
       getTimesForDay(day).forEach((time) => {
         activities.forEach((activity) => {
           const session = getSession(activity, time);
           if (!session) return;
 
-          const people =
-            roleSlots
-              .map((role) => {
-                const person = assignments[createSlotKey(day.date, time, activity.id, role)];
-                return person ? `${role}：${person}` : "";
-              })
-              .filter(Boolean)
-              .join(" / ") || "未安排";
+          const people = roleSlots
+            .map((role) => {
+              const person = assignments[createSlotKey(day.date, time, activity.id, role)];
+              return person ? { role, person, text: `${role}　${person}` } : null;
+            })
+            .filter(Boolean);
 
           rows.push({
             type: "slot",
@@ -690,23 +688,24 @@ export default function ActivitySchedulerPrototype() {
             activity: activity.title,
             content: session.content,
             people,
-            selected: Boolean(selectedStaff && people.includes(`：${selectedStaff}`)),
+            selected: Boolean(selectedStaff && people.some((item) => item.person === selectedStaff)),
           });
         });
       });
     });
 
-    ctx.font = "22px -apple-system, BlinkMacSystemFont, 'Noto Sans TC', sans-serif";
+    ctx.font = "20px -apple-system, BlinkMacSystemFont, 'Noto Sans TC', sans-serif";
     const measuredRows = rows.map((row) => {
-      if (row.type === "day") return { ...row, height: 58 };
+      if (row.type === "day") return { ...row, height: 64 + row.topGap };
 
       const contentLines = wrapCanvasText(ctx, row.content, colWidths[2]);
-      const peopleLines = wrapCanvasText(ctx, row.people, colWidths[3]);
-      const height = Math.max(72, Math.max(contentLines.length, peopleLines.length) * lineHeight + 28);
+      const peopleLines = row.people.flatMap((item) => wrapCanvasText(ctx, item.text, colWidths[3]));
+      const visualLineCount = Math.max(contentLines.length, peopleLines.length || 1);
+      const height = Math.max(70, visualLineCount * lineHeight + 30);
       return { ...row, contentLines, peopleLines, height };
     });
 
-    const height = 132 + measuredRows.reduce((sum, row) => sum + row.height, 0) + 56;
+    const height = 122 + measuredRows.reduce((sum, row) => sum + row.height, 0) + 50;
     canvas.width = width;
     canvas.height = height;
 
@@ -727,14 +726,18 @@ export default function ActivitySchedulerPrototype() {
     }
 
     ctx.fillStyle = "#1c1917";
-    ctx.font = "700 36px -apple-system, BlinkMacSystemFont, 'Noto Sans TC', sans-serif";
-    ctx.fillText("活動人力排班", margin, 58);
-    ctx.font = "20px -apple-system, BlinkMacSystemFont, 'Noto Sans TC', sans-serif";
+    ctx.font = "700 32px -apple-system, BlinkMacSystemFont, 'Noto Sans TC', sans-serif";
+    const dateRange = schedules
+      .map((day) => String(day.date).split("｜")[0].trim())
+      .filter(Boolean);
+    const titleDate = dateRange.length > 1 ? `${dateRange[0]}-${dateRange[dateRange.length - 1]}` : dateRange[0] || "";
+    ctx.fillText(`活動人力排班${titleDate ? `｜${titleDate}` : ""}`, margin, 52);
+    ctx.font = "18px -apple-system, BlinkMacSystemFont, 'Noto Sans TC', sans-serif";
     ctx.fillStyle = "#78716c";
-    ctx.fillText(`${schedules.length} 天活動｜已安排 ${assignedCount} 格｜輸出 ${formatSyncTime()}`, margin, 92);
+    ctx.fillText(`${schedules.length} 天活動｜已安排 ${assignedCount} 格｜輸出 ${formatSyncTime()}`, margin, 82);
     if (selectedStaff) {
       ctx.fillStyle = "#d98b75";
-      ctx.fillText(`目前標注：${selectedStaff}`, margin + 530, 92);
+      ctx.fillText(`目前標注：${selectedStaff}`, margin + 520, 82);
     }
 
     const colX = [
@@ -743,38 +746,46 @@ export default function ActivitySchedulerPrototype() {
       margin + colWidths[0] + colWidths[1] + colGap * 2,
       margin + colWidths[0] + colWidths[1] + colWidths[2] + colGap * 3,
     ];
-    let y = 132;
+    let y = 122;
 
     measuredRows.forEach((row) => {
       if (row.type === "day") {
+        y += row.topGap;
+        const dayHeight = 64;
         ctx.fillStyle = "#fffaf2";
-        ctx.fillRect(margin - 14, y, width - margin * 2 + 28, row.height);
+        ctx.fillRect(margin - 14, y, width - margin * 2 + 28, dayHeight);
         ctx.strokeStyle = "#eadfd5";
-        ctx.strokeRect(margin - 14, y, width - margin * 2 + 28, row.height);
+        ctx.strokeRect(margin - 14, y, width - margin * 2 + 28, dayHeight);
         ctx.fillStyle = "#1c1917";
         ctx.font = "700 24px -apple-system, BlinkMacSystemFont, 'Noto Sans TC', sans-serif";
-        ctx.fillText(row.date, margin, y + 38);
-        y += row.height;
+        ctx.fillText(row.date, margin, y + 40);
+        y += dayHeight;
         return;
       }
 
-      ctx.fillStyle = row.selected ? "#fff1e6" : "rgba(255, 255, 255, 0.92)";
+      const hasPeople = row.people.length > 0;
+      ctx.fillStyle = row.selected ? "#fff1e6" : hasPeople ? "#fffaf2" : "rgba(255, 255, 255, 0.92)";
       ctx.fillRect(margin - 14, y, width - margin * 2 + 28, row.height);
-      ctx.strokeStyle = row.selected ? "#d98b75" : "#f0e8de";
+      ctx.strokeStyle = row.selected ? "#d98b75" : hasPeople ? "#eadfd5" : "#f3ece4";
       ctx.strokeRect(margin - 14, y, width - margin * 2 + 28, row.height);
+      if (hasPeople) {
+        ctx.fillStyle = row.selected ? "#d98b75" : "#e4cbb9";
+        ctx.fillRect(margin - 14, y, 5, row.height);
+      }
 
       ctx.fillStyle = "#44403c";
-      ctx.font = "700 20px -apple-system, BlinkMacSystemFont, 'Noto Sans TC', sans-serif";
-      ctx.fillText(row.time, colX[0], y + 32);
-      ctx.fillText(row.activity, colX[1], y + 32);
+      ctx.font = "700 19px -apple-system, BlinkMacSystemFont, 'Noto Sans TC', sans-serif";
+      ctx.fillText(row.time, colX[0], y + 31);
+      ctx.fillText(row.activity, colX[1], y + 31);
 
-      ctx.font = "20px -apple-system, BlinkMacSystemFont, 'Noto Sans TC', sans-serif";
+      ctx.font = "19px -apple-system, BlinkMacSystemFont, 'Noto Sans TC', sans-serif";
       ctx.fillStyle = "#1c1917";
       row.contentLines.forEach((line, index) => {
         ctx.fillText(line, colX[2], y + 30 + index * lineHeight);
       });
 
       ctx.fillStyle = row.selected ? "#b35f4d" : "#57534e";
+      ctx.font = hasPeople ? "700 19px -apple-system, BlinkMacSystemFont, 'Noto Sans TC', sans-serif" : "19px -apple-system, BlinkMacSystemFont, 'Noto Sans TC', sans-serif";
       row.peopleLines.forEach((line, index) => {
         ctx.fillText(line, colX[3], y + 30 + index * lineHeight);
       });
