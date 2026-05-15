@@ -816,7 +816,7 @@ export default function ActivitySchedulerPrototype() {
     link.remove();
   }
 
-  function downloadScheduleImage() {
+  function downloadScheduleImage(dayIndex = null) {
     if (!schedules.length) {
       setImageExportMessage("目前沒有可輸出的活動流程。");
       return;
@@ -824,8 +824,18 @@ export default function ActivitySchedulerPrototype() {
 
     const today = new Date().toISOString().slice(0, 10);
     let exportedCount = 0;
+    const daysToExport = dayIndex === null
+      ? schedules.map((day, index) => ({ day, index }))
+      : schedules[dayIndex]
+        ? [{ day: schedules[dayIndex], index: dayIndex }]
+        : [];
 
-    schedules.forEach((day, index) => {
+    if (!daysToExport.length) {
+      setImageExportMessage(`目前沒有第 ${dayIndex + 1} 天可輸出。`);
+      return;
+    }
+
+    daysToExport.forEach(({ day, index }) => {
       const canvas = renderScheduleImage([day], index + 1);
       if (!canvas) return;
 
@@ -835,7 +845,7 @@ export default function ActivitySchedulerPrototype() {
       exportedCount += 1;
     });
 
-    setImageExportMessage(`已輸出 ${exportedCount} 張 PNG，每一天各一張，可傳到 LINE 查看。`);
+    setImageExportMessage(`已輸出 ${exportedCount} 張 PNG，可傳到 LINE 查看。`);
   }
 
   function importJson() {
@@ -1327,6 +1337,25 @@ export default function ActivitySchedulerPrototype() {
           >
             {isAdminOpen ? "收合管理工具" : "管理工具"}
           </button>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => downloadScheduleImage(0)}
+              disabled={!schedules[0]}
+              className="rounded-md border border-[#e4cbb9] bg-[#fffdf8] px-3 py-1.5 text-sm font-semibold text-stone-800 transition hover:bg-[#fff8ee] disabled:border-[#eadfd5] disabled:text-stone-300 disabled:hover:bg-[#fffdf8] lg:py-2"
+            >
+              第一天
+            </button>
+            <button
+              type="button"
+              onClick={() => downloadScheduleImage(1)}
+              disabled={!schedules[1]}
+              className="rounded-md border border-[#e4cbb9] bg-[#fffdf8] px-3 py-1.5 text-sm font-semibold text-stone-800 transition hover:bg-[#fff8ee] disabled:border-[#eadfd5] disabled:text-stone-300 disabled:hover:bg-[#fffdf8] lg:py-2"
+            >
+              第二天
+            </button>
+          </div>
+          {imageExportMessage && <div className="mt-1 text-xs leading-5 text-stone-500">{imageExportMessage}</div>}
         </aside>
 
         <main className="mx-auto min-w-0 max-w-[1240px] px-4 py-4 sm:px-5">
@@ -1336,15 +1365,7 @@ export default function ActivitySchedulerPrototype() {
               <div className="mt-1 text-sm text-stone-600">
                 {schedules.length} 天活動，已安排 {assignedCount} 格
               </div>
-              {imageExportMessage && <div className="mt-1 text-xs text-stone-500">{imageExportMessage}</div>}
             </div>
-            <button
-              type="button"
-              onClick={downloadScheduleImage}
-              className="rounded-md border border-[#e4cbb9] bg-[#fffdf8] px-3 py-2 text-sm font-semibold text-stone-800 transition hover:bg-[#fff8ee]"
-            >
-              輸出排班圖
-            </button>
             <div className="hidden flex-wrap items-center gap-2 lg:flex">
               <div className="rounded-md border border-[#eadfd5] bg-[#fffdf8] px-3 py-2 text-sm">
                 同步：<span className="font-semibold">{syncStatus}</span>
