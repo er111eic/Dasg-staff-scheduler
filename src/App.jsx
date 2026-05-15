@@ -653,12 +653,12 @@ export default function ActivitySchedulerPrototype() {
     return lines.length ? lines : [""];
   }
 
-  function downloadScheduleImage() {
+  function renderScheduleImage(daysToRender, dayNumber) {
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
     if (!ctx) {
       setImageExportMessage("此瀏覽器無法建立圖片，請改用桌機或更新瀏覽器。");
-      return;
+      return null;
     }
     const width = 1440;
     const margin = 48;
@@ -666,8 +666,12 @@ export default function ActivitySchedulerPrototype() {
     const colWidths = [140, 210, 480, 460];
     const lineHeight = 26;
     const rows = [];
+    const dayAssignedCount = daysToRender.reduce((count, day) => {
+      const dayPrefix = `${day.date}__`;
+      return count + Object.keys(assignments).filter((key) => key.startsWith(dayPrefix) && assignments[key]).length;
+    }, 0);
 
-    schedules.forEach((day, dayIndex) => {
+    daysToRender.forEach((day, dayIndex) => {
       rows.push({ type: "day", date: day.date, topGap: dayIndex > 0 ? 20 : 0 });
       const activities = orderActivities(day.activities);
       getTimesForDay(day).forEach((time) => {
@@ -727,14 +731,14 @@ export default function ActivitySchedulerPrototype() {
 
     ctx.fillStyle = "#1c1917";
     ctx.font = "700 32px -apple-system, BlinkMacSystemFont, 'Noto Sans TC', sans-serif";
-    const dateRange = schedules
+    const dateRange = daysToRender
       .map((day) => String(day.date).split("｜")[0].trim())
       .filter(Boolean);
     const titleDate = dateRange.length > 1 ? `${dateRange[0]}-${dateRange[dateRange.length - 1]}` : dateRange[0] || "";
-    ctx.fillText(`活動人力排班${titleDate ? `｜${titleDate}` : ""}`, margin, 52);
+    ctx.fillText(`活動人力排班｜第 ${dayNumber} 天${titleDate ? `｜${titleDate}` : ""}`, margin, 52);
     ctx.font = "18px -apple-system, BlinkMacSystemFont, 'Noto Sans TC', sans-serif";
     ctx.fillStyle = "#78716c";
-    ctx.fillText(`${schedules.length} 天活動｜已安排 ${assignedCount} 格｜輸出 ${formatSyncTime()}`, margin, 82);
+    ctx.fillText(`已安排 ${dayAssignedCount} 格｜輸出 ${formatSyncTime()}`, margin, 82);
     if (selectedStaff) {
       ctx.fillStyle = "#d98b75";
       ctx.fillText(`目前標注：${selectedStaff}`, margin + 520, 82);
@@ -793,13 +797,45 @@ export default function ActivitySchedulerPrototype() {
       y += row.height;
     });
 
+    return canvas;
+  }
+
+  function sanitizeFileNamePart(value) {
+    return String(value || "")
+      .replace(/[^\dA-Za-z\u4e00-\u9fff]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 48);
+  }
+
+  function downloadCanvas(canvas, fileName) {
     const link = document.createElement("a");
-    link.download = `activity-staff-scheduler-${new Date().toISOString().slice(0, 10)}.png`;
+    link.download = fileName;
     link.href = canvas.toDataURL("image/png");
     document.body.appendChild(link);
     link.click();
     link.remove();
-    setImageExportMessage("已輸出 PNG，可傳到 LINE 查看。");
+  }
+
+  function downloadScheduleImage() {
+    if (!schedules.length) {
+      setImageExportMessage("目前沒有可輸出的活動流程。");
+      return;
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+    let exportedCount = 0;
+
+    schedules.forEach((day, index) => {
+      const canvas = renderScheduleImage([day], index + 1);
+      if (!canvas) return;
+
+      const dateLabel = sanitizeFileNamePart(String(day.date).split("｜")[0]);
+      const fileName = `activity-staff-scheduler-day-${index + 1}${dateLabel ? `-${dateLabel}` : ""}-${today}.png`;
+      downloadCanvas(canvas, fileName);
+      exportedCount += 1;
+    });
+
+    setImageExportMessage(`已輸出 ${exportedCount} 張 PNG，每一天各一張，可傳到 LINE 查看。`);
   }
 
   function importJson() {
