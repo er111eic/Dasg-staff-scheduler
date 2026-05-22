@@ -118,6 +118,30 @@ const defaultSchedules = [
 
 const emptyAssignments = {};
 
+function cloneData(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function createEventRecord(input = {}, index = 0) {
+  return {
+    id: String(input.id || `event-${Date.now()}-${index + 1}`),
+    name: String(input.name || `第 ${index + 1} 場活動`),
+    staff: Array.isArray(input.staff) ? [...input.staff] : [...defaultStaff],
+    roleSlots: Array.isArray(input.roleSlots) ? [...input.roleSlots] : [...defaultRoleSlots],
+    schedules: Array.isArray(input.schedules) ? cloneData(input.schedules) : [],
+    assignments: input.assignments && typeof input.assignments === "object" ? cloneData(input.assignments) : {},
+  };
+}
+
+const defaultEvent = createEventRecord({
+  id: "event-default",
+  name: "5/16-17 活動",
+  staff: defaultStaff,
+  roleSlots: defaultRoleSlots,
+  schedules: defaultSchedules,
+  assignments: emptyAssignments,
+});
+
 function createSlotKey(date, time, activityId, role) {
   return [date, time, activityId, role].join("__");
 }
@@ -225,6 +249,52 @@ function normalizeImportedData(input) {
   };
 }
 
+function normalizeEventRecord(input, eventIndex = 0) {
+  if (!input || typeof input !== "object") {
+    return createEventRecord({ name: `第 ${eventIndex + 1} 場活動` }, eventIndex);
+  }
+
+  if (!Array.isArray(input.schedules)) {
+    return createEventRecord({
+      id: input.id,
+      name: input.name || `第 ${eventIndex + 1} 場活動`,
+      staff: input.staff || defaultStaff,
+      roleSlots: input.roleSlots || defaultRoleSlots,
+      schedules: [],
+      assignments: {},
+    }, eventIndex);
+  }
+
+  const normalized = normalizeImportedData(input);
+  return createEventRecord({
+    id: input.id,
+    name: input.name || `第 ${eventIndex + 1} 場活動`,
+    ...normalized,
+  }, eventIndex);
+}
+
+function normalizeStoredData(input) {
+  if (!input || typeof input !== "object") {
+    return { events: [defaultEvent], activeEventIndex: 0 };
+  }
+
+  if (Array.isArray(input.events)) {
+    const events = input.events.length
+      ? input.events.map((event, index) => normalizeEventRecord(event, index))
+      : [defaultEvent];
+    const requestedIndex = Number.isInteger(input.activeEventIndex) ? input.activeEventIndex : 0;
+    const activeEventIndex = Math.min(Math.max(requestedIndex, 0), events.length - 1);
+    return { events, activeEventIndex };
+  }
+
+  const event = normalizeEventRecord({
+    id: input.id || "event-default",
+    name: input.name || "5/16-17 活動",
+    ...input,
+  }, 0);
+  return { events: [event], activeEventIndex: 0 };
+}
+
 function formatSyncTime(date = new Date()) {
   return date.toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit" });
 }
@@ -327,6 +397,8 @@ export default function ActivitySchedulerPrototype() {
   const [schedules, setSchedules] = useState(defaultSchedules);
   const [assignments, setAssignments] = useState(emptyAssignments);
   const [roleSlots, setRoleSlots] = useState(defaultRoleSlots);
+  const [events, setEvents] = useState([defaultEvent]);
+  const [activeEventIndex, setActiveEventIndex] = useState(0);
   const [selectedStaff, setSelectedStaff] = useState("");
   const [newStaffName, setNewStaffName] = useState("");
   const [jsonInput, setJsonInput] = useState("");
@@ -364,11 +436,11 @@ export default function ActivitySchedulerPrototype() {
 
     try {
       const parsed = JSON.parse(saved);
-      const normalized = normalizeImportedData(parsed);
-      setStaff(normalized.staff);
-      setSchedules(normalized.schedules);
-      setAssignments(normalized.assignments);
-      setRoleSlots(normalized.roleSlots);
+      const normalized = normalizeStoredData(parsed);
+      const activeEvent = normalized.events[normalized.activeEventIndex];
+      setEvents(normalized.events);
+      setActiveEventIndex(normalized.activeEventIndex);
+      applyEventRecord(activeEvent, normalized.activeEventIndex);
       setImportMessage("已載入 localStorage 排班資料。");
     } catch (error) {
       setImportMessage(`localStorage 資料格式錯誤：${error.message}`);
@@ -376,9 +448,8 @@ export default function ActivitySchedulerPrototype() {
   }, []);
 
   useEffect(() => {
-    const payload = { staff, schedules, assignments, roleSlots };
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-  }, [staff, schedules, assignments, roleSlots]);
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(currentPayload()));
+  }, [staff, schedules, assignments, roleSlots, events, activeEventIndex]);
 
   useEffect(() => {
     const savedConfig = window.localStorage.getItem(FIREBASE_CONFIG_KEY);
@@ -413,7 +484,7 @@ export default function ActivitySchedulerPrototype() {
               return;
             }
 
-            const normalized = normalizeImportedData(snapshot.data());
+            const normalized = normalizeStoredData(snapshot.data());
             const cloudPayload = JSON.stringify(normalized);
 
             hasCloudLoadedRef.current = true;
@@ -430,10 +501,9 @@ export default function ActivitySchedulerPrototype() {
             if (autoSaveTimerRef.current) window.clearTimeout(autoSaveTimerRef.current);
             lastCloudPayloadRef.current = cloudPayload;
             savedChangeSerialRef.current = localChangeSerialRef.current;
-            setStaff(normalized.staff);
-            setSchedules(normalized.schedules);
-            setAssignments(normalized.assignments);
-            setRoleSlots(normalized.roleSlots);
+            setEvents(normalized.events);
+            setActiveEventIndex(normalized.activeEventIndex);
+            applyEventRecord(normalized.events[normalized.activeEventIndex], normalized.activeEventIndex);
             setSelectedStaff("");
             undoStackRef.current = [];
             setUndoCount(0);
@@ -468,7 +538,7 @@ export default function ActivitySchedulerPrototype() {
     if (localChangeSerialRef.current <= savedChangeSerialRef.current) return undefined;
 
     const payload = currentPayload();
-    const payloadJson = JSON.stringify(payload);
+    const payloadJson = JSON.stringify(normalizeStoredData(payload));
     if (payloadJson === lastCloudPayloadRef.current) {
       savedChangeSerialRef.current = localChangeSerialRef.current;
       return undefined;
@@ -497,7 +567,7 @@ export default function ActivitySchedulerPrototype() {
     return () => {
       if (autoSaveTimerRef.current) window.clearTimeout(autoSaveTimerRef.current);
     };
-  }, [staff, schedules, assignments, roleSlots, firebaseConfigText, firebaseEventId]);
+  }, [staff, schedules, assignments, roleSlots, events, activeEventIndex, firebaseConfigText, firebaseEventId]);
 
   useEffect(() => {
     return () => {
@@ -519,8 +589,8 @@ export default function ActivitySchedulerPrototype() {
   }, [assignments]);
 
   const exportJson = useMemo(
-    () => JSON.stringify({ staff, schedules, assignments, roleSlots }, null, 2),
-    [staff, schedules, assignments, roleSlots],
+    () => JSON.stringify(currentPayload(), null, 2),
+    [staff, schedules, assignments, roleSlots, events, activeEventIndex],
   );
 
   const assignedCount = useMemo(() => Object.keys(assignments).length, [assignments]);
@@ -548,10 +618,10 @@ export default function ActivitySchedulerPrototype() {
     undoStackRef.current = undoStackRef.current.slice(0, -1);
     setUndoCount(undoStackRef.current.length);
     markLocalChange();
-    setStaff(previous.payload.staff);
-    setSchedules(previous.payload.schedules);
-    setAssignments(previous.payload.assignments);
-    setRoleSlots(previous.payload.roleSlots);
+    const normalized = normalizeStoredData(previous.payload);
+    setEvents(normalized.events);
+    setActiveEventIndex(normalized.activeEventIndex);
+    applyEventRecord(normalized.events[normalized.activeEventIndex], normalized.activeEventIndex);
     setSelectedStaff(previous.selectedStaff || "");
     setUndoMessage("已回到上一步。");
   }
@@ -851,15 +921,24 @@ export default function ActivitySchedulerPrototype() {
   function importJson() {
     try {
       const parsed = JSON.parse(jsonInput);
-      const normalized = normalizeImportedData(parsed);
       pushUndoSnapshot("已記錄匯入前狀態。");
       markLocalChange();
-      setStaff(normalized.staff);
-      setSchedules(normalized.schedules);
-      setAssignments(normalized.assignments);
-      setRoleSlots(normalized.roleSlots);
-      setSelectedStaff("");
-      setImportMessage("JSON 匯入完成，已同步寫入 localStorage。");
+      if (Array.isArray(parsed.events)) {
+        const normalized = normalizeStoredData(parsed);
+        setEvents(normalized.events);
+        setActiveEventIndex(normalized.activeEventIndex);
+        applyEventRecord(normalized.events[normalized.activeEventIndex], normalized.activeEventIndex);
+        setSelectedStaff("");
+        setImportMessage("多場次 JSON 匯入完成，已同步寫入 localStorage。");
+      } else {
+        const normalized = normalizeImportedData(parsed);
+        setStaff(normalized.staff);
+        setSchedules(normalized.schedules);
+        setAssignments(normalized.assignments);
+        setRoleSlots(normalized.roleSlots);
+        setSelectedStaff("");
+        setImportMessage("JSON 匯入完成，已同步寫入 localStorage。");
+      }
     } catch (error) {
       setImportMessage(`JSON 匯入失敗：${error.message}`);
     }
@@ -931,16 +1010,26 @@ export default function ActivitySchedulerPrototype() {
   function importAiJson() {
     try {
       const parsed = extractJsonFromText(aiJson);
-      const normalized = normalizeImportedData(parsed);
       pushUndoSnapshot("已記錄 AI JSON 匯入前狀態。");
       markLocalChange();
-      setStaff(normalized.staff);
-      setSchedules(normalized.schedules);
-      setAssignments(normalized.assignments);
-      setRoleSlots(normalized.roleSlots);
-      setJsonInput(JSON.stringify(normalized, null, 2));
-      setSelectedStaff("");
-      setImportMessage("AI 解析 JSON 已匯入，並同步寫入 localStorage。");
+      if (Array.isArray(parsed.events)) {
+        const normalized = normalizeStoredData(parsed);
+        setEvents(normalized.events);
+        setActiveEventIndex(normalized.activeEventIndex);
+        applyEventRecord(normalized.events[normalized.activeEventIndex], normalized.activeEventIndex);
+        setJsonInput(JSON.stringify(normalized, null, 2));
+        setSelectedStaff("");
+        setImportMessage("AI 多場次 JSON 已匯入，並同步寫入 localStorage。");
+      } else {
+        const normalized = normalizeImportedData(parsed);
+        setStaff(normalized.staff);
+        setSchedules(normalized.schedules);
+        setAssignments(normalized.assignments);
+        setRoleSlots(normalized.roleSlots);
+        setJsonInput(JSON.stringify(normalized, null, 2));
+        setSelectedStaff("");
+        setImportMessage("AI 解析 JSON 已匯入，並同步寫入 localStorage。");
+      }
       setOcrMessage("AI JSON 匯入完成。");
     } catch (error) {
       setOcrMessage(`AI JSON 匯入失敗：${error.message}`);
@@ -960,8 +1049,41 @@ export default function ActivitySchedulerPrototype() {
     return config;
   }
 
+  function applyEventRecord(event, eventIndex = activeEventIndex) {
+    const normalized = createEventRecord(event, eventIndex);
+    setStaff(normalized.staff);
+    setSchedules(normalized.schedules);
+    setAssignments(normalized.assignments);
+    setRoleSlots(normalized.roleSlots);
+  }
+
+  function currentEventRecord() {
+    const base = events[activeEventIndex] || {};
+    return createEventRecord({
+      ...base,
+      name: base.name || `第 ${activeEventIndex + 1} 場活動`,
+      staff,
+      schedules,
+      assignments,
+      roleSlots,
+    }, activeEventIndex);
+  }
+
+  function eventsWithCurrentEvent() {
+    const nextEvents = events.length ? [...events] : [currentEventRecord()];
+    nextEvents[activeEventIndex] = currentEventRecord();
+    return nextEvents;
+  }
+
   function currentPayload() {
-    return { staff, schedules, assignments, roleSlots };
+    return {
+      staff,
+      schedules,
+      assignments,
+      roleSlots,
+      events: eventsWithCurrentEvent(),
+      activeEventIndex,
+    };
   }
 
   async function savePayloadToFirebase(firebase, payload, successMessage) {
@@ -970,7 +1092,7 @@ export default function ActivitySchedulerPrototype() {
       ...payload,
       updatedAt: firebase.serverTimestamp(),
     });
-    lastCloudPayloadRef.current = JSON.stringify(payload);
+    lastCloudPayloadRef.current = JSON.stringify(normalizeStoredData(payload));
     setSyncStatus(successMessage);
     setLastSyncedAt(formatSyncTime());
   }
@@ -1007,17 +1129,16 @@ export default function ActivitySchedulerPrototype() {
         return;
       }
 
-      const normalized = normalizeImportedData(snapshot.data());
+      const normalized = normalizeStoredData(snapshot.data());
       if (autoSaveTimerRef.current) window.clearTimeout(autoSaveTimerRef.current);
       lastCloudPayloadRef.current = JSON.stringify(normalized);
       savedChangeSerialRef.current = localChangeSerialRef.current;
       undoStackRef.current = [];
       setUndoCount(0);
       setUndoMessage("");
-      setStaff(normalized.staff);
-      setSchedules(normalized.schedules);
-      setAssignments(normalized.assignments);
-      setRoleSlots(normalized.roleSlots);
+      setEvents(normalized.events);
+      setActiveEventIndex(normalized.activeEventIndex);
+      applyEventRecord(normalized.events[normalized.activeEventIndex], normalized.activeEventIndex);
       setSelectedStaff("");
       setSyncStatus("已同步雲端");
       setLastSyncedAt(formatSyncTime());
@@ -1068,6 +1189,39 @@ export default function ActivitySchedulerPrototype() {
     setRoleSlots(defaultRoleSlots);
     setSelectedStaff("");
     setImportMessage("已還原預設資料。");
+  }
+
+  function switchEvent(targetIndex) {
+    const mergedEvents = eventsWithCurrentEvent();
+    if (targetIndex < 0 || targetIndex >= mergedEvents.length || targetIndex === activeEventIndex) return;
+
+    markLocalChange();
+    setEvents(mergedEvents);
+    setActiveEventIndex(targetIndex);
+    applyEventRecord(mergedEvents[targetIndex], targetIndex);
+    setSelectedStaff("");
+    setUndoMessage("");
+  }
+
+  function addNextEvent() {
+    const mergedEvents = eventsWithCurrentEvent();
+    const sourceEvent = mergedEvents[activeEventIndex] || currentEventRecord();
+    const nextEvent = createEventRecord({
+      id: `event-${Date.now()}`,
+      name: `第 ${mergedEvents.length + 1} 場活動`,
+      staff: sourceEvent.staff,
+      roleSlots: sourceEvent.roleSlots,
+      schedules: [],
+      assignments: {},
+    }, mergedEvents.length);
+
+    markLocalChange();
+    setEvents([...mergedEvents, nextEvent]);
+    setActiveEventIndex(mergedEvents.length);
+    applyEventRecord(nextEvent, mergedEvents.length);
+    setSelectedStaff("");
+    setImportMessage("已新增空白場次，請上傳活動流程表。");
+    setImageExportMessage("");
   }
 
   function StaffPool() {
@@ -1183,6 +1337,39 @@ export default function ActivitySchedulerPrototype() {
         </button>
         <AssignmentSlots date={date} time={time} activityId={activity.id} />
       </div>
+    );
+  }
+
+  function EmptyScheduleState() {
+    return (
+      <section className="rounded-md border border-[#eadfd5] bg-white p-6">
+        <div className="mx-auto max-w-xl text-center">
+          <h3 className="text-lg font-bold text-stone-950">尚未建立活動流程</h3>
+          <p className="mt-2 text-sm leading-6 text-stone-600">
+            上傳活動流程表圖片後，下一步會接 AI 解析，產生可套用的完整班表。
+          </p>
+
+          <label
+            htmlFor="empty-flow-image"
+            className="mt-5 inline-flex cursor-pointer items-center justify-center rounded-md bg-[#2f2a25] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#453d35]"
+          >
+            上傳活動流程表
+          </label>
+          <input id="empty-flow-image" type="file" accept="image/*" onChange={handleFlowImageChange} className="sr-only" />
+
+          {flowImageUrl && (
+            <div className="mt-5 rounded-md border border-[#eadfd5] bg-[#fffdf8] p-3 text-left">
+              <div className="mb-2 text-sm font-semibold text-stone-800">流程表預覽</div>
+              <div className="aspect-[4/3] overflow-hidden rounded-md border border-[#f0e8de] bg-white">
+                <img src={flowImageUrl} alt="流程表預覽" className="h-full w-full object-contain" />
+              </div>
+              <div className="mt-2 text-xs leading-5 text-stone-500">
+                已先保留圖片上傳入口；OpenAI 解析會接在這個步驟之後，解析完成再套用成完整班表。
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
     );
   }
 
@@ -1302,6 +1489,36 @@ export default function ActivitySchedulerPrototype() {
           </h1>
           <p className="mt-1 text-xs leading-5 text-stone-600 lg:mt-2 lg:text-sm lg:leading-6">拖曳人員到課程格，或先選人再點課程。</p>
 
+          <div className="mt-3 rounded-md border border-[#eadfd5] bg-[#fffdf8] p-2 lg:mt-4 lg:p-3">
+            <div className="text-xs text-stone-500">目前場次</div>
+            <div className="mt-1 truncate text-sm font-semibold text-stone-900">{events[activeEventIndex]?.name || `第 ${activeEventIndex + 1} 場活動`}</div>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => switchEvent(activeEventIndex - 1)}
+                disabled={activeEventIndex === 0}
+                className="rounded-md border border-[#eadfd5] bg-white px-2 py-1.5 text-sm font-semibold text-stone-700 transition hover:border-[#e4cbb9] hover:bg-[#fff8ee] disabled:text-stone-300 disabled:hover:border-[#eadfd5] disabled:hover:bg-white"
+              >
+                上一場
+              </button>
+              <button
+                type="button"
+                onClick={() => switchEvent(activeEventIndex + 1)}
+                disabled={activeEventIndex >= events.length - 1}
+                className="rounded-md border border-[#eadfd5] bg-white px-2 py-1.5 text-sm font-semibold text-stone-700 transition hover:border-[#e4cbb9] hover:bg-[#fff8ee] disabled:text-stone-300 disabled:hover:border-[#eadfd5] disabled:hover:bg-white"
+              >
+                下一場
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={addNextEvent}
+              className="mt-2 w-full rounded-md bg-[#2f2a25] px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-[#453d35]"
+            >
+              新增下一場
+            </button>
+          </div>
+
           <div className="mt-3 lg:mt-5">
             <div className="mb-2 text-sm font-semibold">人員</div>
             <StaffPool />
@@ -1361,9 +1578,9 @@ export default function ActivitySchedulerPrototype() {
         <main className="mx-auto min-w-0 max-w-[1240px] px-4 py-4 sm:px-5">
           <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
             <div>
-              <h2 className="text-xl font-bold">排班表</h2>
+              <h2 className="text-xl font-bold">{events[activeEventIndex]?.name || "排班表"}</h2>
               <div className="mt-1 text-sm text-stone-600">
-                {schedules.length} 天活動，已安排 {assignedCount} 格
+                第 {activeEventIndex + 1} / {events.length} 場，{schedules.length} 天活動，已安排 {assignedCount} 格
               </div>
             </div>
             <div className="hidden flex-wrap items-center gap-2 lg:flex">
@@ -1475,40 +1692,44 @@ export default function ActivitySchedulerPrototype() {
           </section>
           )}
 
-          <div className="space-y-6">
-            {schedules.map((day) => {
-              const activities = orderActivities(day.activities);
-              const times = getTimesForDay(day);
-              const gridTemplateColumns = `120px minmax(320px, 1.2fr) repeat(${Math.max(activities.length - 1, 0)}, minmax(280px, 1fr))`;
+          {schedules.length === 0 ? (
+            <EmptyScheduleState />
+          ) : (
+            <div className="space-y-6">
+              {schedules.map((day) => {
+                const activities = orderActivities(day.activities);
+                const times = getTimesForDay(day);
+                const gridTemplateColumns = `120px minmax(320px, 1.2fr) repeat(${Math.max(activities.length - 1, 0)}, minmax(280px, 1fr))`;
 
-              return (
-                <section key={day.date} className="overflow-x-auto rounded-md border border-[#eadfd5] bg-white shadow-[0_1px_2px_rgba(80,60,40,0.05)]">
-                  <div style={{ minWidth: `${120 + activities.length * 320}px` }}>
-                    <div className="jp-day-title border-b border-[#f0e8de] px-4 py-3 text-lg font-bold">{day.date}</div>
-                    <div className="grid border-b border-[#eadfd5] bg-[#fff8ee] text-sm font-semibold text-stone-700" style={{ gridTemplateColumns }}>
-                      <div className="border-r border-[#eadfd5] p-3">時段</div>
-                      {activities.map((activity) => (
-                        <div key={activity.id} className="border-r border-[#eadfd5] p-3 last:border-r-0">
-                          {activity.title}
-                        </div>
-                      ))}
-                    </div>
-
-                    {times.map((time) => (
-                      <div key={`${day.date}__${time}`} className="grid border-b border-[#f3ece4] last:border-b-0" style={{ gridTemplateColumns }}>
-                        <div className="border-r border-[#f0e8de] bg-[#fffdf8] p-3 text-sm font-semibold text-stone-700">{time}</div>
+                return (
+                  <section key={day.date} className="overflow-x-auto rounded-md border border-[#eadfd5] bg-white shadow-[0_1px_2px_rgba(80,60,40,0.05)]">
+                    <div style={{ minWidth: `${120 + activities.length * 320}px` }}>
+                      <div className="jp-day-title border-b border-[#f0e8de] px-4 py-3 text-lg font-bold">{day.date}</div>
+                      <div className="grid border-b border-[#eadfd5] bg-[#fff8ee] text-sm font-semibold text-stone-700" style={{ gridTemplateColumns }}>
+                        <div className="border-r border-[#eadfd5] p-3">時段</div>
                         {activities.map((activity) => (
-                          <div key={`${activity.id}__${time}`} className="border-r border-[#f3ece4] bg-white/80 p-3 last:border-r-0">
-                            <EventCell date={day.date} time={time} activity={activity} session={getSession(activity, time)} />
+                          <div key={activity.id} className="border-r border-[#eadfd5] p-3 last:border-r-0">
+                            {activity.title}
                           </div>
                         ))}
                       </div>
-                    ))}
-                  </div>
-                </section>
-              );
-            })}
-          </div>
+
+                      {times.map((time) => (
+                        <div key={`${day.date}__${time}`} className="grid border-b border-[#f3ece4] last:border-b-0" style={{ gridTemplateColumns }}>
+                          <div className="border-r border-[#f0e8de] bg-[#fffdf8] p-3 text-sm font-semibold text-stone-700">{time}</div>
+                          {activities.map((activity) => (
+                            <div key={`${activity.id}__${time}`} className="border-r border-[#f3ece4] bg-white/80 p-3 last:border-r-0">
+                              <EventCell date={day.date} time={time} activity={activity} session={getSession(activity, time)} />
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+          )}
         </main>
       </div>
     </div>
