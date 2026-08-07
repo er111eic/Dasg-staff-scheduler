@@ -1268,10 +1268,10 @@ export default function ActivitySchedulerPrototype() {
     if (!visibleRoles.length) return null;
 
     return (
-      <div className={`rounded-md border border-[#eadfd5] bg-[#fffdf8] px-3 py-2 ${compact ? "w-full sm:w-auto" : ""}`}>
-        <div className={compact ? "flex flex-wrap items-center gap-2" : ""}>
-          <div className={compact ? "text-xs font-semibold text-stone-500" : "mb-2 text-xs font-semibold text-stone-500"}>整場工作</div>
-          <div className={compact ? "grid grid-cols-2 gap-2" : "grid grid-cols-2 gap-2"}>
+      <div className={`rounded-md border border-[#eadfd5] bg-[#fffdf8] px-3 py-2 ${compact ? "min-w-[430px]" : ""}`}>
+        <div className={compact ? "flex items-center gap-3 whitespace-nowrap" : ""}>
+          <div className={compact ? "shrink-0 text-xs font-semibold text-stone-500" : "mb-2 text-xs font-semibold text-stone-500"}>整場工作</div>
+          <div className={compact ? "flex min-w-0 items-center gap-2" : "grid grid-cols-2 gap-2"}>
           {visibleRoles.map((role) => {
             const slotKey = createContinuousSlotKey(activeEventId, role);
             const person = assignments[slotKey];
@@ -1282,7 +1282,7 @@ export default function ActivitySchedulerPrototype() {
                 key={slotKey}
                 onDragOver={(event) => event.preventDefault()}
                 onDrop={(event) => handleDropToSlot(event, slotKey)}
-                className={`relative min-h-[50px] rounded-md border text-xs transition ${
+                className={`relative rounded-md border text-xs transition ${compact ? "min-h-[46px] min-w-[145px]" : "min-h-[50px]"} ${
                   isSelectedPerson
                     ? "border-[#d98b75] bg-[#fff1e6] shadow-[inset_0_0_0_1px_#d98b75]"
                     : person
@@ -1290,9 +1290,9 @@ export default function ActivitySchedulerPrototype() {
                       : "border-dashed border-[#eadfd5] bg-white hover:border-[#e4cbb9] hover:bg-[#fff8ee]"
                 }`}
               >
-                <button type="button" onClick={() => assignPerson(slotKey)} className="h-full min-h-[50px] w-full p-2 text-left">
+                <button type="button" onClick={() => assignPerson(slotKey)} className={`h-full w-full p-2 text-left ${compact ? "min-h-[46px]" : "min-h-[50px]"}`}>
                   <div className="font-semibold text-stone-700">{role}</div>
-                  <div className={`mt-1 pr-7 text-sm ${person ? "font-semibold text-stone-950" : "text-stone-400"}`}>
+                  <div className={`mt-1 pr-7 text-sm ${compact ? "whitespace-nowrap" : ""} ${person ? "font-semibold text-stone-950" : "text-stone-400"}`}>
                     {person || "未安排"}
                   </div>
                 </button>
@@ -1749,15 +1749,15 @@ export default function ActivitySchedulerPrototype() {
                 return (
                   <section key={day.date} className="overflow-x-auto rounded-md border border-[#eadfd5] bg-white shadow-[0_1px_2px_rgba(80,60,40,0.05)]">
                     <div style={{ minWidth: `${120 + activities.length * 320}px` }}>
-                      <div className="jp-day-title flex flex-wrap items-center justify-between gap-3 border-b border-[#f0e8de] px-4 py-3">
-                        <div className="text-lg font-bold">{day.date}</div>
-                        <ContinuousAssignments compact />
-                      </div>
+                      <div className="jp-day-title border-b border-[#f0e8de] px-4 py-3 text-center text-lg font-bold">{day.date}</div>
                       <div className="grid border-b border-[#eadfd5] bg-[#fff8ee] text-sm font-semibold text-stone-700" style={{ gridTemplateColumns }}>
                         <div className="border-r border-[#eadfd5] p-3">時段</div>
-                        {activities.map((activity) => (
+                        {activities.map((activity, activityIndex) => (
                           <div key={activity.id} className="border-r border-[#eadfd5] p-3 last:border-r-0">
-                            {activity.title}
+                            <div className="flex items-center gap-4">
+                              <span className="min-w-0 font-semibold">{activity.title}</span>
+                              {activityIndex === 0 && <div className="ml-auto"><ContinuousAssignments compact /></div>}
+                            </div>
                           </div>
                         ))}
                       </div>
