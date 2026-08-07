@@ -1263,14 +1263,15 @@ export default function ActivitySchedulerPrototype() {
     );
   }
 
-  function ContinuousAssignments() {
+  function ContinuousAssignments({ compact = false }) {
     const visibleRoles = continuousRoleSlots.filter((role) => roleSlots.includes(role));
     if (!visibleRoles.length) return null;
 
     return (
-      <div className="rounded-md border border-[#eadfd5] bg-[#fffdf8] px-3 py-2">
-        <div className="mb-2 text-xs font-semibold text-stone-500">整場工作</div>
-        <div className="grid grid-cols-2 gap-2">
+      <div className={`rounded-md border border-[#eadfd5] bg-[#fffdf8] px-3 py-2 ${compact ? "w-full sm:w-auto" : ""}`}>
+        <div className={compact ? "flex flex-wrap items-center gap-2" : ""}>
+          <div className={compact ? "text-xs font-semibold text-stone-500" : "mb-2 text-xs font-semibold text-stone-500"}>整場工作</div>
+          <div className={compact ? "grid grid-cols-2 gap-2" : "grid grid-cols-2 gap-2"}>
           {visibleRoles.map((role) => {
             const slotKey = createContinuousSlotKey(activeEventId, role);
             const person = assignments[slotKey];
@@ -1309,6 +1310,7 @@ export default function ActivitySchedulerPrototype() {
               </div>
             );
           })}
+          </div>
         </div>
       </div>
     );
@@ -1580,10 +1582,6 @@ export default function ActivitySchedulerPrototype() {
               {lastSyncedAt && <div className="mt-1 truncate text-xs text-stone-500">最後同步 {lastSyncedAt}</div>}
             </div>
           </div>
-          <div className="mt-2 lg:hidden">
-            <ContinuousAssignments />
-          </div>
-
           <button
             type="button"
             onClick={undoLastChange}
@@ -1631,7 +1629,6 @@ export default function ActivitySchedulerPrototype() {
               </div>
             </div>
             <div className="hidden flex-wrap items-center gap-2 lg:flex">
-              <ContinuousAssignments />
               <div className="rounded-md border border-[#eadfd5] bg-[#fffdf8] px-3 py-2 text-sm">
                 同步：<span className="font-semibold">{syncStatus}</span>
               </div>
@@ -1752,7 +1749,10 @@ export default function ActivitySchedulerPrototype() {
                 return (
                   <section key={day.date} className="overflow-x-auto rounded-md border border-[#eadfd5] bg-white shadow-[0_1px_2px_rgba(80,60,40,0.05)]">
                     <div style={{ minWidth: `${120 + activities.length * 320}px` }}>
-                      <div className="jp-day-title border-b border-[#f0e8de] px-4 py-3 text-lg font-bold">{day.date}</div>
+                      <div className="jp-day-title flex flex-wrap items-center justify-between gap-3 border-b border-[#f0e8de] px-4 py-3">
+                        <div className="text-lg font-bold">{day.date}</div>
+                        <ContinuousAssignments compact />
+                      </div>
                       <div className="grid border-b border-[#eadfd5] bg-[#fff8ee] text-sm font-semibold text-stone-700" style={{ gridTemplateColumns }}>
                         <div className="border-r border-[#eadfd5] p-3">時段</div>
                         {activities.map((activity) => (
