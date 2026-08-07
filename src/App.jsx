@@ -724,16 +724,31 @@ export default function ActivitySchedulerPrototype() {
     const width = 1440;
     const margin = 48;
     const colGap = 18;
-    const colWidths = [140, 210, 480, 460];
+    const colWidths = [140, 680, 470];
     const lineHeight = 26;
     const rows = [];
+    const continuousItems = continuousRoleSlots
+      .filter((role) => roleSlots.includes(role))
+      .map((role) => {
+        const person = assignments[createContinuousSlotKey(activeEventId, role)];
+        return { role, person, text: person ? `${role}　${person}` : `${role}　` };
+      });
+    const continuousAssignedCount = continuousItems.filter((item) => item.person).length;
     const dayAssignedCount = daysToRender.reduce((count, day) => {
       const dayPrefix = `${day.date}__`;
       return count + Object.keys(assignments).filter((key) => key.startsWith(dayPrefix) && assignments[key]).length;
-    }, 0);
+    }, continuousAssignedCount);
 
     daysToRender.forEach((day, dayIndex) => {
       rows.push({ type: "day", date: day.date, topGap: dayIndex > 0 ? 20 : 0 });
+      if (continuousItems.length) {
+        rows.push({
+          type: "continuous",
+          text: continuousItems.map((item) => item.text).join("　｜　"),
+          selected: Boolean(selectedStaff && continuousItems.some((item) => item.person === selectedStaff)),
+          hasPeople: continuousItems.some((item) => item.person),
+        });
+      }
       const activities = orderActivities(day.activities);
       getTimesForDay(day).forEach((time) => {
         activities.forEach((activity) => {
@@ -750,8 +765,7 @@ export default function ActivitySchedulerPrototype() {
           rows.push({
             type: "slot",
             time,
-            activity: activity.title,
-            content: session.content,
+            content: session.content || activity.title,
             people,
             selected: Boolean(selectedStaff && people.some((item) => item.person === selectedStaff)),
           });
@@ -762,9 +776,13 @@ export default function ActivitySchedulerPrototype() {
     ctx.font = "20px -apple-system, BlinkMacSystemFont, 'Noto Sans TC', sans-serif";
     const measuredRows = rows.map((row) => {
       if (row.type === "day") return { ...row, height: 64 + row.topGap };
+      if (row.type === "continuous") {
+        const contentLines = wrapCanvasText(ctx, row.text, colWidths[1] + colGap + colWidths[2]);
+        return { ...row, contentLines, height: Math.max(58, contentLines.length * lineHeight + 28) };
+      }
 
-      const contentLines = wrapCanvasText(ctx, row.content, colWidths[2]);
-      const peopleLines = row.people.flatMap((item) => wrapCanvasText(ctx, item.text, colWidths[3]));
+      const contentLines = wrapCanvasText(ctx, row.content, colWidths[1]);
+      const peopleLines = row.people.flatMap((item) => wrapCanvasText(ctx, item.text, colWidths[2]));
       const visualLineCount = Math.max(contentLines.length, peopleLines.length || 1);
       const height = Math.max(70, visualLineCount * lineHeight + 30);
       return { ...row, contentLines, peopleLines, height };
@@ -809,7 +827,6 @@ export default function ActivitySchedulerPrototype() {
       margin,
       margin + colWidths[0] + colGap,
       margin + colWidths[0] + colWidths[1] + colGap * 2,
-      margin + colWidths[0] + colWidths[1] + colWidths[2] + colGap * 3,
     ];
     let y = 122;
 
@@ -828,6 +845,29 @@ export default function ActivitySchedulerPrototype() {
         return;
       }
 
+      if (row.type === "continuous") {
+        ctx.fillStyle = row.selected ? "#fff1e6" : row.hasPeople ? "#fffaf2" : "rgba(255, 255, 255, 0.92)";
+        ctx.fillRect(margin - 14, y, width - margin * 2 + 28, row.height);
+        ctx.strokeStyle = row.selected ? "#d98b75" : "#eadfd5";
+        ctx.strokeRect(margin - 14, y, width - margin * 2 + 28, row.height);
+        if (row.hasPeople) {
+          ctx.fillStyle = row.selected ? "#d98b75" : "#e4cbb9";
+          ctx.fillRect(margin - 14, y, 5, row.height);
+        }
+
+        ctx.fillStyle = "#44403c";
+        ctx.font = "700 19px -apple-system, BlinkMacSystemFont, 'Noto Sans TC', sans-serif";
+        ctx.fillText("整場工作", colX[0], y + 34);
+        ctx.fillStyle = row.selected ? "#b35f4d" : "#57534e";
+        ctx.font = row.hasPeople ? "700 19px -apple-system, BlinkMacSystemFont, 'Noto Sans TC', sans-serif" : "19px -apple-system, BlinkMacSystemFont, 'Noto Sans TC', sans-serif";
+        row.contentLines.forEach((line, index) => {
+          ctx.fillText(line, colX[1], y + 34 + index * lineHeight);
+        });
+
+        y += row.height;
+        return;
+      }
+
       const hasPeople = row.people.length > 0;
       ctx.fillStyle = row.selected ? "#fff1e6" : hasPeople ? "#fffaf2" : "rgba(255, 255, 255, 0.92)";
       ctx.fillRect(margin - 14, y, width - margin * 2 + 28, row.height);
@@ -841,18 +881,17 @@ export default function ActivitySchedulerPrototype() {
       ctx.fillStyle = "#44403c";
       ctx.font = "700 19px -apple-system, BlinkMacSystemFont, 'Noto Sans TC', sans-serif";
       ctx.fillText(row.time, colX[0], y + 31);
-      ctx.fillText(row.activity, colX[1], y + 31);
 
       ctx.font = "19px -apple-system, BlinkMacSystemFont, 'Noto Sans TC', sans-serif";
       ctx.fillStyle = "#1c1917";
       row.contentLines.forEach((line, index) => {
-        ctx.fillText(line, colX[2], y + 30 + index * lineHeight);
+        ctx.fillText(line, colX[1], y + 30 + index * lineHeight);
       });
 
       ctx.fillStyle = row.selected ? "#b35f4d" : "#57534e";
       ctx.font = hasPeople ? "700 19px -apple-system, BlinkMacSystemFont, 'Noto Sans TC', sans-serif" : "19px -apple-system, BlinkMacSystemFont, 'Noto Sans TC', sans-serif";
       row.peopleLines.forEach((line, index) => {
-        ctx.fillText(line, colX[3], y + 30 + index * lineHeight);
+        ctx.fillText(line, colX[2], y + 30 + index * lineHeight);
       });
 
       y += row.height;
