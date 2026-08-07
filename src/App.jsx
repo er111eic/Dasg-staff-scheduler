@@ -20,6 +20,8 @@ const DEFAULT_FIREBASE_CONFIG = {
 const defaultStaff = ["思賢", "元妙", "旻恩", "崇萱", "詠禎", "嘉鴻"];
 
 const defaultRoleSlots = ["主攝", "副攝", "支援", "音控", "音控支援", "剪輯", "剪輯支援"];
+const continuousRoleSlots = ["剪輯", "剪輯支援"];
+const continuousRoleSlotSet = new Set(continuousRoleSlots);
 
 const defaultSchedules = [
   {
@@ -101,6 +103,18 @@ const defaultEvent = createEventRecord({
 
 function createSlotKey(date, time, activityId, role) {
   return [date, time, activityId, role].join("__");
+}
+
+function createContinuousSlotKey(eventId, role) {
+  return ["event", eventId, role].join("__");
+}
+
+function isContinuousSlotKey(slotKey) {
+  return String(slotKey).startsWith("event__");
+}
+
+function getSlotRole(slotKey) {
+  return String(slotKey).split("__").at(-1);
 }
 
 function orderActivities(activities) {
@@ -543,6 +557,7 @@ export default function ActivitySchedulerPrototype() {
 
     Object.entries(assignments).forEach(([slotKey, person]) => {
       if (!person) return;
+      if (isContinuousSlotKey(slotKey) || continuousRoleSlotSet.has(getSlotRole(slotKey))) return;
       const [date, time] = slotKey.split("__");
       const conflictKey = `${date}__${time}__${person}`;
       map[conflictKey] = (map[conflictKey] || 0) + 1;
@@ -557,6 +572,11 @@ export default function ActivitySchedulerPrototype() {
   );
 
   const assignedCount = useMemo(() => Object.keys(assignments).length, [assignments]);
+  const sessionRoleSlots = useMemo(
+    () => roleSlots.filter((role) => !continuousRoleSlotSet.has(role)),
+    [roleSlots],
+  );
+  const activeEventId = events[activeEventIndex]?.id || `event-${activeEventIndex + 1}`;
 
   function markLocalChange() {
     localChangeSerialRef.current += 1;
@@ -599,12 +619,13 @@ export default function ActivitySchedulerPrototype() {
 
   function assignPersonToNextSlot(date, time, activityId, person = selectedStaff) {
     if (!person) return;
+    if (!sessionRoleSlots.length) return;
 
     pushUndoSnapshot("已記錄排班前狀態。");
     markLocalChange();
     setAssignments((prev) => {
       const next = { ...prev };
-      const openRole = roleSlots.find((role) => !next[createSlotKey(date, time, activityId, role)]) || roleSlots[roleSlots.length - 1];
+      const openRole = sessionRoleSlots.find((role) => !next[createSlotKey(date, time, activityId, role)]) || sessionRoleSlots[sessionRoleSlots.length - 1];
       next[createSlotKey(date, time, activityId, openRole)] = person;
       return next;
     });
@@ -719,7 +740,7 @@ export default function ActivitySchedulerPrototype() {
           const session = getSession(activity, time);
           if (!session) return;
 
-          const people = roleSlots
+          const people = sessionRoleSlots
             .map((role) => {
               const person = assignments[createSlotKey(day.date, time, activity.id, role)];
               return person ? { role, person, text: `${role}　${person}` } : null;
@@ -1242,10 +1263,61 @@ export default function ActivitySchedulerPrototype() {
     );
   }
 
+  function ContinuousAssignments() {
+    const visibleRoles = continuousRoleSlots.filter((role) => roleSlots.includes(role));
+    if (!visibleRoles.length) return null;
+
+    return (
+      <div className="rounded-md border border-[#eadfd5] bg-[#fffdf8] px-3 py-2">
+        <div className="mb-2 text-xs font-semibold text-stone-500">整場工作</div>
+        <div className="grid grid-cols-2 gap-2">
+          {visibleRoles.map((role) => {
+            const slotKey = createContinuousSlotKey(activeEventId, role);
+            const person = assignments[slotKey];
+            const isSelectedPerson = Boolean(selectedStaff && person === selectedStaff);
+
+            return (
+              <div
+                key={slotKey}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={(event) => handleDropToSlot(event, slotKey)}
+                className={`relative min-h-[50px] rounded-md border text-xs transition ${
+                  isSelectedPerson
+                    ? "border-[#d98b75] bg-[#fff1e6] shadow-[inset_0_0_0_1px_#d98b75]"
+                    : person
+                      ? "border-[#e4cbb9] bg-[#fff8ee]"
+                      : "border-dashed border-[#eadfd5] bg-white hover:border-[#e4cbb9] hover:bg-[#fff8ee]"
+                }`}
+              >
+                <button type="button" onClick={() => assignPerson(slotKey)} className="h-full min-h-[50px] w-full p-2 text-left">
+                  <div className="font-semibold text-stone-700">{role}</div>
+                  <div className={`mt-1 pr-7 text-sm ${person ? "font-semibold text-stone-950" : "text-stone-400"}`}>
+                    {person || "未安排"}
+                  </div>
+                </button>
+                {person && (
+                  <button
+                    type="button"
+                    onClick={() => clearSlot(slotKey)}
+                    className="absolute right-1.5 top-1.5 h-5 w-5 rounded border border-[#eadfd5] bg-white text-xs font-semibold leading-4 text-stone-500 transition hover:border-red-300 hover:text-red-600"
+                    aria-label={`清除 ${role} 的 ${person}`}
+                    title="清除這格人員"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
   function AssignmentSlots({ date, time, activityId }) {
     return (
-      <div className="mt-3 grid grid-cols-2 gap-2 xl:grid-cols-7">
-        {roleSlots.map((role) => {
+      <div className="mt-3 grid grid-cols-2 gap-2 xl:grid-cols-5">
+        {sessionRoleSlots.map((role) => {
           const slotKey = createSlotKey(date, time, activityId, role);
           const person = assignments[slotKey];
           const conflict = isConflict(slotKey, person);
@@ -1508,6 +1580,9 @@ export default function ActivitySchedulerPrototype() {
               {lastSyncedAt && <div className="mt-1 truncate text-xs text-stone-500">最後同步 {lastSyncedAt}</div>}
             </div>
           </div>
+          <div className="mt-2 lg:hidden">
+            <ContinuousAssignments />
+          </div>
 
           <button
             type="button"
@@ -1556,6 +1631,7 @@ export default function ActivitySchedulerPrototype() {
               </div>
             </div>
             <div className="hidden flex-wrap items-center gap-2 lg:flex">
+              <ContinuousAssignments />
               <div className="rounded-md border border-[#eadfd5] bg-[#fffdf8] px-3 py-2 text-sm">
                 同步：<span className="font-semibold">{syncStatus}</span>
               </div>
