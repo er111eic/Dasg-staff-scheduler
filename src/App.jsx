@@ -332,11 +332,17 @@ ${ocrText}`;
 
 async function createFirebaseClient(config) {
   const appModule = await import(/* @vite-ignore */ `https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-app.js`);
+  const authModule = await import(/* @vite-ignore */ `https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-auth.js`);
   const firestoreModule = await import(/* @vite-ignore */ `https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-firestore.js`);
   const app = appModule.getApps().length ? appModule.getApp() : appModule.initializeApp(config);
+  const auth = authModule.getAuth(app);
+  if (!auth.currentUser) {
+    await authModule.signInAnonymously(auth);
+  }
   const db = firestoreModule.getFirestore(app);
 
   return {
+    auth,
     db,
     doc: firestoreModule.doc,
     collection: firestoreModule.collection,
