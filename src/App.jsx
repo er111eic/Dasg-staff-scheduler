@@ -19,7 +19,7 @@ const DEFAULT_FIREBASE_CONFIG = {
 
 const defaultStaff = ["思賢", "元妙", "旻恩", "崇萱", "詠禎", "嘉鴻"];
 
-const defaultRoleSlots = ["主攝", "副攝", "支援", "音控", "音控支援"];
+const defaultRoleSlots = ["主攝", "副攝", "支援", "音控", "音控支援", "剪輯", "剪輯支援"];
 
 const defaultSchedules = [
   {
