@@ -8,12 +8,13 @@ const AUTO_SAVE_DELAY_MS = 250;
 const OCR_WORKFLOW_ENABLED = false;
 const TESSERACT_CDN = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
 const DEFAULT_FIREBASE_CONFIG = {
-  apiKey: "AIzaSyALbqBVKXcsvntdrb0LX74yKKdGdluFnW4",
+  apiKey: "AIzaSyALbqBVkXcsvntdrbOL7K4yKkKddlufmN4",
   authDomain: "dasg-staff-scheduler.firebaseapp.com",
   projectId: "dasg-staff-scheduler",
   storageBucket: "dasg-staff-scheduler.firebasestorage.app",
   messagingSenderId: "199735855413",
   appId: "1:199735855413:web:d404700c17d07a7e6da47c",
+  measurementId: "G-WW7KHRFE9M",
 };
 
 const defaultStaff = ["思賢", "元妙", "旻恩", "崇萱", "詠禎", "嘉鴻"];
