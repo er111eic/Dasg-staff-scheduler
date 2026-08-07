@@ -661,6 +661,13 @@ export default function ActivitySchedulerPrototype() {
     assignPersonToNextSlot(date, time, activityId, person);
   }
 
+  function handleDropToSlot(event, slotKey) {
+    event.preventDefault();
+    event.stopPropagation();
+    const person = event.dataTransfer.getData("text/plain");
+    assignPerson(slotKey, person);
+  }
+
   function isConflict(slotKey, person) {
     if (!person) return false;
     const [date, time] = slotKey.split("__");
@@ -1237,7 +1244,7 @@ export default function ActivitySchedulerPrototype() {
 
   function AssignmentSlots({ date, time, activityId }) {
     return (
-      <div className="mt-3 grid grid-cols-2 gap-2 xl:grid-cols-5">
+      <div className="mt-3 grid grid-cols-2 gap-2 xl:grid-cols-7">
         {roleSlots.map((role) => {
           const slotKey = createSlotKey(date, time, activityId, role);
           const person = assignments[slotKey];
@@ -1247,6 +1254,8 @@ export default function ActivitySchedulerPrototype() {
           return (
             <div
               key={slotKey}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => handleDropToSlot(event, slotKey)}
               className={`relative min-h-[58px] rounded-md border text-xs transition ${
                 isSelectedPerson
                   ? conflict
