@@ -17,6 +17,45 @@ body {
   background: #fbfaf7;
 }
 
+* { box-sizing: border-box; letter-spacing: 0; }
+button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible {
+  outline: 2px solid #58756a;
+  outline-offset: 3px;
+}
+.schedule-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  margin-bottom: 12px;
+  border-block: 1px solid #e7e5e4;
+}
+.schedule-toolbar input, .schedule-toolbar select {
+  min-height: 40px;
+  max-width: 100%;
+  border: 1px solid #d6d3d1;
+  border-radius: 6px;
+  padding: 8px 12px;
+  background: white;
+  font: inherit;
+  font-size: 14px;
+}
+.schedule-day { scroll-margin-top: 16px; }
+.single-activity .activity-heading { justify-content: space-between; }
+.single-activity .continuous-work { margin-left: 0; }
+@media (max-width: 1023px) {
+  .jp-sidebar:not(.mobile-tools-open) .mobile-secondary { display: none; }
+  .schedule-day { scroll-margin-top: 47vh; }
+  .single-activity .continuous-work { width: 100%; }
+  .single-activity .continuous-work > div { min-width: 0; padding: 8px 0; border: 0; }
+  .single-activity .continuous-work > div > div { flex-wrap: wrap; gap: 8px; }
+  .single-activity .continuous-work > div > div > div:last-child { flex: 1; }
+  .single-activity .continuous-work > div > div > div:last-child > div { min-width: 0; flex: 1; }
+  .single-activity button { overflow-wrap: anywhere; }
+  .schedule-toolbar input { width: 100%; }
+}
+
 button,
 input,
 textarea {
@@ -70,3 +109,6 @@ button:disabled {
 .jp-mark {
   color: #d98b75;
 }
+
+.jp-page { background-image: none; background-color: #fafafa; }
+.jp-panel { background: #f5f7f5; }

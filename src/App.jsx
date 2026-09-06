@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { findConflictingSlots } from "./scheduling.js";
 
 const STORAGE_KEY = "activity-staff-scheduler:v1";
 const FIREBASE_CONFIG_KEY = "activity-staff-scheduler:firebase-config";
@@ -370,12 +371,20 @@ async function createFirebaseClient(config) {
 }
 
 export default function ActivitySchedulerPrototype() {
-  const [staff, setStaff] = useState(defaultStaff);
-  const [schedules, setSchedules] = useState(defaultSchedules);
-  const [assignments, setAssignments] = useState(emptyAssignments);
-  const [roleSlots, setRoleSlots] = useState(defaultRoleSlots);
-  const [events, setEvents] = useState([defaultEvent]);
-  const [activeEventIndex, setActiveEventIndex] = useState(0);
+  const [initialData] = useState(() => {
+    try {
+      return normalizeStoredData(JSON.parse(window.localStorage.getItem(STORAGE_KEY)));
+    } catch {
+      return { events: [defaultEvent], activeEventIndex: 0 };
+    }
+  });
+  const initialEvent = initialData.events[initialData.activeEventIndex];
+  const [staff, setStaff] = useState(initialEvent.staff);
+  const [schedules, setSchedules] = useState(initialEvent.schedules);
+  const [assignments, setAssignments] = useState(initialEvent.assignments);
+  const [roleSlots, setRoleSlots] = useState(initialEvent.roleSlots);
+  const [events, setEvents] = useState(initialData.events);
+  const [activeEventIndex, setActiveEventIndex] = useState(initialData.activeEventIndex);
   const [selectedStaff, setSelectedStaff] = useState("");
   const [newStaffName, setNewStaffName] = useState("");
   const [jsonInput, setJsonInput] = useState("");
@@ -398,6 +407,10 @@ export default function ActivitySchedulerPrototype() {
   const [imageExportMessage, setImageExportMessage] = useState("");
   const [undoCount, setUndoCount] = useState(0);
   const [undoMessage, setUndoMessage] = useState("");
+  const [scheduleQuery, setScheduleQuery] = useState("");
+  const [scheduleFilter, setScheduleFilter] = useState("all");
+  const [actionMessage, setActionMessage] = useState("");
+  const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
   const hasCloudLoadedRef = useRef(false);
   const isApplyingCloudDataRef = useRef(false);
   const lastCloudPayloadRef = useRef("");
@@ -408,24 +421,11 @@ export default function ActivitySchedulerPrototype() {
   const undoStackRef = useRef([]);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem(STORAGE_KEY);
-    if (!saved) return;
-
     try {
-      const parsed = JSON.parse(saved);
-      const normalized = normalizeStoredData(parsed);
-      const activeEvent = normalized.events[normalized.activeEventIndex];
-      setEvents(normalized.events);
-      setActiveEventIndex(normalized.activeEventIndex);
-      applyEventRecord(activeEvent, normalized.activeEventIndex);
-      setImportMessage("已載入 localStorage 排班資料。");
-    } catch (error) {
-      setImportMessage(`localStorage 資料格式錯誤：${error.message}`);
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(currentPayload()));
+    } catch {
+      setActionMessage("此瀏覽器無法儲存本機備份，請確認雲端同步狀態。");
     }
-  }, []);
-
-  useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(currentPayload()));
   }, [staff, schedules, assignments, roleSlots, events, activeEventIndex]);
 
   useEffect(() => {
@@ -552,19 +552,7 @@ export default function ActivitySchedulerPrototype() {
     };
   }, [flowImageUrl]);
 
-  const conflicts = useMemo(() => {
-    const map = {};
-
-    Object.entries(assignments).forEach(([slotKey, person]) => {
-      if (!person) return;
-      if (isContinuousSlotKey(slotKey) || continuousRoleSlotSet.has(getSlotRole(slotKey))) return;
-      const [date, time] = slotKey.split("__");
-      const conflictKey = `${date}__${time}__${person}`;
-      map[conflictKey] = (map[conflictKey] || 0) + 1;
-    });
-
-    return map;
-  }, [assignments]);
+  const conflicts = useMemo(() => findConflictingSlots(assignments, continuousRoleSlots), [assignments]);
 
   const exportJson = useMemo(
     () => JSON.stringify(currentPayload(), null, 2),
@@ -607,28 +595,26 @@ export default function ActivitySchedulerPrototype() {
     applyEventRecord(normalized.events[normalized.activeEventIndex], normalized.activeEventIndex);
     setSelectedStaff(previous.selectedStaff || "");
     setUndoMessage("已回到上一步。");
+    setActionMessage("已回到上一步。");
   }
 
   function assignPerson(slotKey, person = selectedStaff) {
-    if (!person) return;
+    if (!person) { setActionMessage("請先選擇人員。"); return; }
+    if (!staff.includes(person)) return;
     if (assignments[slotKey] === person) return;
     pushUndoSnapshot("已記錄排班前狀態。");
     markLocalChange();
     setAssignments((prev) => ({ ...prev, [slotKey]: person }));
+    setActionMessage(`已安排 ${person} · ${getSlotRole(slotKey)}`);
   }
 
   function assignPersonToNextSlot(date, time, activityId, person = selectedStaff) {
-    if (!person) return;
+    if (!person) { setActionMessage("請先選擇人員。"); return; }
+    if (!staff.includes(person)) return;
     if (!sessionRoleSlots.length) return;
-
-    pushUndoSnapshot("已記錄排班前狀態。");
-    markLocalChange();
-    setAssignments((prev) => {
-      const next = { ...prev };
-      const openRole = sessionRoleSlots.find((role) => !next[createSlotKey(date, time, activityId, role)]) || sessionRoleSlots[sessionRoleSlots.length - 1];
-      next[createSlotKey(date, time, activityId, openRole)] = person;
-      return next;
-    });
+    const openRole = sessionRoleSlots.find((role) => !assignments[createSlotKey(date, time, activityId, role)]);
+    if (!openRole) { setActionMessage("這堂課已滿員，請點選要更換的職位。"); return; }
+    assignPerson(createSlotKey(date, time, activityId, openRole), person);
   }
 
   function clearSlot(slotKey) {
@@ -690,9 +676,7 @@ export default function ActivitySchedulerPrototype() {
   }
 
   function isConflict(slotKey, person) {
-    if (!person) return false;
-    const [date, time] = slotKey.split("__");
-    return conflicts[`${date}__${time}__${person}`] > 1;
+    return Boolean(person) && conflicts.has(slotKey);
   }
 
   function wrapCanvasText(ctx, text, maxWidth) {
@@ -1230,6 +1214,8 @@ export default function ActivitySchedulerPrototype() {
     setActiveEventIndex(targetIndex);
     applyEventRecord(mergedEvents[targetIndex], targetIndex);
     setSelectedStaff("");
+    setScheduleQuery("");
+    setScheduleFilter("all");
     setUndoMessage("");
   }
 
@@ -1254,7 +1240,7 @@ export default function ActivitySchedulerPrototype() {
     setImageExportMessage("");
   }
 
-  function StaffPool() {
+  function renderStaffPool() {
     return (
       <div>
         <form onSubmit={addStaffMember} className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] gap-2 lg:mb-3">
@@ -1263,6 +1249,7 @@ export default function ActivitySchedulerPrototype() {
             onChange={(event) => setNewStaffName(event.target.value)}
             className="min-w-0 rounded-md border border-[#eadfd5] bg-[#fffdf8] px-2.5 py-1.5 text-sm outline-none transition placeholder:text-stone-400 focus:border-[#d98b75] lg:px-3 lg:py-2"
             placeholder="新增人員"
+            aria-label="新增人員姓名"
           />
           <button type="submit" className="rounded-md bg-[#2f2a25] px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-[#453d35] lg:py-2">
             新增
@@ -1281,7 +1268,7 @@ export default function ActivitySchedulerPrototype() {
                   : "border-[#eadfd5] bg-[#fffdf8] text-stone-800 hover:border-[#e4cbb9] hover:bg-[#fff8ee]"
               }`}
             >
-              <button type="button" onClick={() => setSelectedStaff(person)} className="min-w-[4.75rem] px-3 py-2 text-left text-sm font-semibold lg:min-w-0 lg:py-2.5">
+              <button type="button" aria-pressed={selectedStaff === person} onClick={() => setSelectedStaff(selectedStaff === person ? "" : person)} className="min-w-[4.75rem] px-3 py-2 text-left text-sm font-semibold lg:min-w-0 lg:py-2.5">
                 {person}
               </button>
               <button
@@ -1302,7 +1289,7 @@ export default function ActivitySchedulerPrototype() {
     );
   }
 
-  function ContinuousAssignments({ compact = false }) {
+  function renderContinuousAssignments({ compact = false }) {
     const visibleRoles = continuousRoleSlots.filter((role) => roleSlots.includes(role));
     if (!visibleRoles.length) return null;
 
@@ -1355,7 +1342,7 @@ export default function ActivitySchedulerPrototype() {
     );
   }
 
-  function AssignmentSlots({ date, time, activityId }) {
+  function renderAssignmentSlots({ date, time, activityId }) {
     return (
       <div className="mt-3 grid grid-cols-2 gap-2 xl:grid-cols-5">
         {sessionRoleSlots.map((role) => {
@@ -1406,7 +1393,7 @@ export default function ActivitySchedulerPrototype() {
     );
   }
 
-  function EventCell({ date, time, activity, session }) {
+  function renderEventCell({ date, time, activity, session }) {
     if (!session) {
       return <div className="min-h-[112px] rounded-md border border-[#f0e8de] bg-[#fffdf8] p-3 text-sm text-stone-400">—</div>;
     }
@@ -1420,12 +1407,12 @@ export default function ActivitySchedulerPrototype() {
         <button type="button" onClick={() => assignPersonToNextSlot(date, time, activity.id)} className="w-full text-left text-sm font-semibold leading-relaxed text-stone-950">
           {session.content}
         </button>
-        <AssignmentSlots date={date} time={time} activityId={activity.id} />
+        {renderAssignmentSlots({ date, time, activityId: activity.id })}
       </div>
     );
   }
 
-  function EmptyScheduleState() {
+  function renderEmptyScheduleState() {
     return (
       <section className="rounded-md border border-[#eadfd5] bg-white p-6">
         <div className="mx-auto max-w-xl text-center">
@@ -1458,7 +1445,7 @@ export default function ActivitySchedulerPrototype() {
     );
   }
 
-  function AdminTools() {
+  function renderAdminTools() {
     if (!isAdminOpen) return null;
 
     return (
@@ -1567,14 +1554,14 @@ export default function ActivitySchedulerPrototype() {
   return (
     <div className="jp-page min-h-screen text-stone-950">
       <div className="min-h-screen lg:pl-64">
-        <aside className="jp-sidebar sticky top-0 z-30 max-h-[46vh] overflow-y-auto border-b border-[#eadfd5] p-3 shadow-sm shadow-stone-200/60 lg:fixed lg:inset-y-0 lg:left-0 lg:z-20 lg:max-h-none lg:w-64 lg:border-b-0 lg:border-r lg:p-5 lg:shadow-none">
+        <aside className={`jp-sidebar ${mobileToolsOpen ? "mobile-tools-open" : ""} sticky top-0 z-30 max-h-[46vh] overflow-y-auto border-b border-[#eadfd5] p-3 shadow-sm shadow-stone-200/60 lg:fixed lg:inset-y-0 lg:left-0 lg:z-20 lg:max-h-none lg:w-64 lg:border-b-0 lg:border-r lg:p-5 lg:shadow-none`}>
           <h1 className="flex items-center gap-2 text-lg font-bold lg:text-2xl">
             <span className="jp-mark text-base" aria-hidden="true">✿</span>
             活動人力排班
+            <button type="button" aria-expanded={mobileToolsOpen} onClick={() => setMobileToolsOpen((open) => !open)} className="ml-auto text-xs font-normal lg:hidden">{mobileToolsOpen ? "收合工具" : "更多工具"}</button>
           </h1>
-          <p className="mt-1 text-xs leading-5 text-stone-600 lg:mt-2 lg:text-sm lg:leading-6">拖曳人員到課程格，或先選人再點課程。</p>
 
-          <div className="mt-3 rounded-md border border-[#eadfd5] bg-[#fffdf8] p-2 lg:mt-4 lg:p-3">
+          <div className="mobile-secondary mt-3 rounded-md border border-[#eadfd5] bg-[#fffdf8] p-2 lg:mt-4 lg:p-3">
             <div className="text-xs text-stone-500">目前場次</div>
             <div className="mt-1 truncate text-sm font-semibold text-stone-900">{events[activeEventIndex]?.name || `第 ${activeEventIndex + 1} 場活動`}</div>
             <div className="mt-2 grid grid-cols-2 gap-2">
@@ -1606,7 +1593,7 @@ export default function ActivitySchedulerPrototype() {
 
           <div className="mt-3 lg:mt-5">
             <div className="mb-2 text-sm font-semibold">人員</div>
-            <StaffPool />
+            {renderStaffPool()}
           </div>
 
           <div className="mt-2 grid grid-cols-2 gap-2 lg:mt-4 lg:block">
@@ -1631,6 +1618,7 @@ export default function ActivitySchedulerPrototype() {
           </button>
           {undoMessage && <div className="mt-1 text-xs leading-5 text-stone-500">{undoMessage}</div>}
 
+          <div className="mobile-secondary">
           <button
             type="button"
             onClick={() => setIsAdminOpen((open) => !open)}
@@ -1657,6 +1645,7 @@ export default function ActivitySchedulerPrototype() {
             </button>
           </div>
           {imageExportMessage && <div className="mt-1 text-xs leading-5 text-stone-500">{imageExportMessage}</div>}
+          </div>
         </aside>
 
         <main className="mx-auto min-w-0 max-w-[1240px] px-4 py-4 sm:px-5">
@@ -1677,7 +1666,20 @@ export default function ActivitySchedulerPrototype() {
             </div>
           </div>
 
-          <AdminTools />
+          {renderAdminTools()}
+
+          <div className="schedule-toolbar">
+            <input type="search" aria-label="搜尋課程或活動" placeholder="搜尋課程或活動" value={scheduleQuery} onChange={(event) => setScheduleQuery(event.target.value)} />
+            <select aria-label="排班篩選" value={scheduleFilter} onChange={(event) => setScheduleFilter(event.target.value)}>
+              <option value="all">全部課程</option>
+              <option value="selected" disabled={!selectedStaff}>所選人員{selectedStaff ? `：${selectedStaff}` : ""}</option>
+              <option value="conflict">有衝突的課程（{conflicts.size} 格）</option>
+            </select>
+            <nav aria-label="日期跳轉" className="flex flex-wrap gap-3">
+              {schedules.map((day, index) => <a key={day.date} href={`#schedule-day-${index}`} className="text-sm underline underline-offset-4">{day.date}</a>)}
+            </nav>
+          </div>
+          {actionMessage && <p role="status" className="mb-3 text-sm text-stone-600">{actionMessage}</p>}
 
           {OCR_WORKFLOW_ENABLED && (
             <section className="mb-4 rounded-lg border border-stone-300 bg-white p-4">
@@ -1777,36 +1779,45 @@ export default function ActivitySchedulerPrototype() {
           )}
 
           {schedules.length === 0 ? (
-            <EmptyScheduleState />
+            renderEmptyScheduleState()
           ) : (
             <div className="space-y-6">
-              {schedules.map((day) => {
+              {schedules.map((day, dayIndex) => {
                 const activities = orderActivities(day.activities);
-                const times = getTimesForDay(day);
-                const gridTemplateColumns = `120px minmax(320px, 1.2fr) repeat(${Math.max(activities.length - 1, 0)}, minmax(280px, 1fr))`;
+                const times = getTimesForDay(day).filter((time) => activities.some((activity) => {
+                  const session = getSession(activity, time);
+                  if (!session) return false;
+                  if (!`${activity.title} ${session.content} ${time}`.toLowerCase().includes(scheduleQuery.trim().toLowerCase())) return false;
+                  const keys = sessionRoleSlots.map((role) => createSlotKey(day.date, time, activity.id, role));
+                  if (scheduleFilter === "selected" && selectedStaff) return keys.some((key) => assignments[key] === selectedStaff);
+                  if (scheduleFilter === "conflict") return keys.some((key) => conflicts.has(key));
+                  return true;
+                }));
+                const gridTemplateColumns = activities.length === 1 ? "minmax(0, 1fr)" : `100px repeat(${activities.length}, minmax(300px, 1fr))`;
 
                 return (
-                  <section key={day.date} className="overflow-x-auto rounded-md border border-[#eadfd5] bg-white shadow-[0_1px_2px_rgba(80,60,40,0.05)]">
-                    <div style={{ minWidth: `${120 + activities.length * 320}px` }}>
+                  <section id={`schedule-day-${dayIndex}`} key={day.date} className={`schedule-day overflow-x-auto border border-[#eadfd5] bg-white ${activities.length === 1 ? "single-activity" : ""}`}>
+                    <div style={{ minWidth: activities.length === 1 ? 0 : `${100 + activities.length * 320}px` }}>
                       <div className="jp-day-title border-b border-[#f0e8de] px-4 py-3 text-center text-lg font-bold">{day.date}</div>
                       <div className="grid border-b border-[#eadfd5] bg-[#fff8ee] text-sm font-semibold text-stone-700" style={{ gridTemplateColumns }}>
-                        <div className="border-r border-[#eadfd5] p-3">時段</div>
+                        {activities.length !== 1 && <div className="border-r border-[#eadfd5] p-3">時段</div>}
                         {activities.map((activity, activityIndex) => (
                           <div key={activity.id} className="border-r border-[#eadfd5] p-3 last:border-r-0">
-                            <div className="flex items-center gap-4">
+                            <div className="activity-heading flex flex-wrap items-center gap-4">
                               <span className="min-w-0 font-semibold">{activity.title}</span>
-                              {activityIndex === 0 && <div className="ml-auto"><ContinuousAssignments compact /></div>}
+                              {activityIndex === 0 && <div className="continuous-work ml-auto">{renderContinuousAssignments({ compact: true })}</div>}
                             </div>
                           </div>
                         ))}
                       </div>
 
+                      {times.length === 0 && <p className="p-6 text-sm text-stone-500">這一天沒有符合條件的課程。</p>}
                       {times.map((time) => (
                         <div key={`${day.date}__${time}`} className="grid border-b border-[#f3ece4] last:border-b-0" style={{ gridTemplateColumns }}>
                           <div className="border-r border-[#f0e8de] bg-[#fffdf8] p-3 text-sm font-semibold text-stone-700">{time}</div>
                           {activities.map((activity) => (
                             <div key={`${activity.id}__${time}`} className="border-r border-[#f3ece4] bg-white/80 p-3 last:border-r-0">
-                              <EventCell date={day.date} time={time} activity={activity} session={getSession(activity, time)} />
+                              {renderEventCell({ date: day.date, time, activity, session: getSession(activity, time) })}
                             </div>
                           ))}
                         </div>
