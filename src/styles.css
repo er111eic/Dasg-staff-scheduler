@@ -1,51 +1,103 @@
 @import "tailwindcss";
 
 :root {
-  color: #1c1917;
-  background: #fbfaf7;
-  font-family:
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Noto Sans TC",
-    sans-serif;
+  color: #202124;
+  background: #e5e7eb;
+  font-family: -apple-system, BlinkMacSystemFont, "Noto Sans TC", system-ui, sans-serif;
+  --glass: rgba(255, 255, 255, 0.94);
+  --line: rgba(73, 82, 96, 0.24);
+  --accent: #0066cc;
+  --glass-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 2px 8px rgba(39, 47, 59, 0.06);
 }
-
-body {
-  margin: 0;
-  background: #fbfaf7;
-}
-
 * { box-sizing: border-box; letter-spacing: 0; }
-button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible {
-  outline: 2px solid #58756a;
-  outline-offset: 3px;
+body { margin: 0; }
+button, input, textarea, select { font: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+::selection { background: #cce3ff; color: #172b46; }
+.jp-page {
+  background: #e5e7eb;
+  color: #202124;
 }
-.schedule-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 0;
-  margin-bottom: 12px;
-  border-block: 1px solid #e7e5e4;
+/* Limit glass blur to navigation and controls to keep long schedules legible. */
+.jp-sidebar {
+  background: rgba(255,255,255,0.94);
+  -webkit-backdrop-filter: blur(24px) saturate(145%);
+  backdrop-filter: blur(24px) saturate(145%);
+  border-color: rgba(255,255,255,0.9);
+  box-shadow: inset -1px 0 0 rgba(255,255,255,0.9), 1px 0 0 var(--line);
 }
+.jp-sidebar h1 { font-size: 20px; font-weight: 700; color: #202124; }
+.jp-sidebar input { background: #fff; border-color: var(--line); border-radius: 8px; }
+.jp-sidebar button[type="submit"] { background: var(--accent); border-radius: 8px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.25); }
+.jp-sidebar button[type="submit"]:hover { background: #0059b3; }
+.jp-sidebar > .mobile-secondary:first-of-type { background: transparent; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: 12px 0 16px; }
+.jp-sidebar .mobile-secondary button, .jp-sidebar > button {
+  border-color: var(--line);
+  border-radius: 8px;
+  background: var(--glass);
+  color: #3b414a;
+  box-shadow: var(--glass-shadow);
+}
+.jp-sidebar .mobile-secondary button:hover, .jp-sidebar > button:hover { background: rgba(255,255,255,0.95); }
+.jp-sidebar .mobile-secondary button:disabled, .jp-sidebar > button:disabled { color: #9298a1; box-shadow: none; background: rgba(255,255,255,0.25); border-color: var(--line); }
+.staff-choice { border-color: var(--line); background: #fff; border-radius: 8px; box-shadow: var(--glass-shadow); }
+.staff-choice:hover { background: rgba(255,255,255,0.95); border-color: #c3d7ed; }
+.staff-choice[data-selected="true"] { background: #0066cc; border-color: #005fbe; color: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), 0 2px 6px rgba(0,102,204,0.15); }
+.staff-choice[data-selected="true"] button:last-child { color: #d6eaff; }
+.staff-choice[data-selected="true"] button:last-child:hover { background: #0059b3; }
+.jp-sidebar .jp-panel { border: 0; border-top: 1px solid var(--line); background: transparent; border-radius: 0; padding: 12px 0; }
+.header-status > div { border-color: var(--line); background: var(--glass); box-shadow: var(--glass-shadow); border-radius: 8px; max-width: 360px; overflow-wrap: anywhere; }
+.schedule-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 14px 0; margin-bottom: 18px; border-block: 1px solid var(--line); }
 .schedule-toolbar input, .schedule-toolbar select {
-  min-height: 40px;
+  min-height: 42px;
   max-width: 100%;
-  border: 1px solid #d6d3d1;
-  border-radius: 6px;
-  padding: 8px 12px;
-  background: white;
-  font: inherit;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 14px;
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  box-shadow: var(--glass-shadow);
   font-size: 14px;
+  color: #343942;
 }
-.schedule-day { scroll-margin-top: 16px; }
+.schedule-toolbar input { flex: 1; min-width: 180px; max-width: 340px; }
+.schedule-toolbar a { color: var(--accent); text-decoration: none; padding-block: 8px; }
+.schedule-toolbar a:hover { text-decoration: underline; text-underline-offset: 4px; }
+.schedule-day { scroll-margin-top: 16px; border-color: var(--line); background: #fff; }
+.jp-day-title { background: #edf0f4; color: #202733; text-align: left; border-color: var(--line); padding: 18px 20px; font-size: 17px; box-shadow: inset 0 1px 0 #fff; }
+.schedule-day > div > .grid, .schedule-day > div > .grid > div { border-color: var(--line); }
+.schedule-day > div > .activity-header { background: #fff; }
+.single-activity > div > .grid > div:first-child:not(:last-child) { background: #f5f7f9; font-size: 13px; font-variant-numeric: tabular-nums; color: #626b77; padding: 10px 20px; border-right: 0; }
 .single-activity .activity-heading { justify-content: space-between; }
 .single-activity .continuous-work { margin-left: 0; }
+.activity-heading { color: #616b78; font-size: 13px; }
+.continuous-assignments { border: 0; background: transparent; padding: 0; }
+.assignment-slot { border-color: #b7c0cc; background: #fff; border-radius: 8px; box-shadow: none; transition: background-color 140ms, border-color 140ms, box-shadow 140ms; }
+.assignment-slot[data-filled="true"] { border-style: solid; background: #eef3fa; border-color: #b3c5de; box-shadow: inset 0 1px 0 #fff; }
+.assignment-slot[data-selected="true"] { background: #eaf3ff; border-color: #4793e7; box-shadow: inset 0 0 0 1px #4793e7; }
+.assignment-slot[data-conflict="true"] { background: #fff1f0; border-color: #d66a67; box-shadow: none; }
+.assignment-slot:hover { border-color: #83add9; }
+.assignment-slot > button:first-child { padding: 10px 12px; }
+.assignment-slot > button:first-child > div:first-child { color: #626b77; font-size: 12px; font-weight: 500; padding-right: 24px; }
+.assignment-slot > button:first-child > div:nth-child(2) { line-height: 1.6; }
+.assignment-slot[data-filled="false"] > button:first-child > div:nth-child(2) { color: #626b77; }
+.jp-page input::placeholder, .jp-page textarea::placeholder { color: #626b77; opacity: 1; }
+.assignment-slot > button[aria-label] { border-color: transparent; background: transparent; color: #758295; }
+.assignment-slot > button[aria-label]:hover { background: #ffe5e3; color: #b02e27; }
+.course-cell { padding: 8px; background: transparent; }
+.course-cell > button { font-size: 15px; line-height: 1.7; font-weight: 600; color: #252b33; }
+@media (min-width: 1024px) {
+  .jp-page main { padding: 28px; }
+  .jp-sidebar { padding-top: 28px; }
+}
 @media (max-width: 1023px) {
   .jp-sidebar:not(.mobile-tools-open) .mobile-secondary { display: none; }
+  .jp-sidebar { background: rgba(255,255,255,0.97); box-shadow: 0 1px 0 var(--line); }
+  .jp-sidebar h1 { font-size: 17px; }
+  .jp-sidebar .jp-panel { padding: 8px 0 0; }
   .schedule-day { scroll-margin-top: 47vh; }
   .single-activity .continuous-work { width: 100%; }
   .single-activity .continuous-work > div { min-width: 0; padding: 8px 0; border: 0; }
@@ -53,62 +105,17 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
   .single-activity .continuous-work > div > div > div:last-child { flex: 1; }
   .single-activity .continuous-work > div > div > div:last-child > div { min-width: 0; flex: 1; }
   .single-activity button { overflow-wrap: anywhere; }
-  .schedule-toolbar input { width: 100%; }
+  .schedule-toolbar input { width: 100%; max-width: none; }
+  .assignment-grid { gap: 8px; }
+  .assignment-slot > button[aria-label] { min-width: 28px; min-height: 28px; top: 2px; right: 2px; }
+  .jp-day-title { padding: 14px 16px; }
 }
-
-button,
-input,
-textarea {
-  font: inherit;
+@supports not (backdrop-filter: blur(1px)) {
+  .jp-sidebar, .schedule-toolbar input, .schedule-toolbar select { background: #f6f8fb; }
 }
-
-button {
-  cursor: pointer;
+@media (prefers-reduced-transparency: reduce) {
+  .jp-sidebar, .schedule-toolbar input, .schedule-toolbar select { backdrop-filter: none; -webkit-backdrop-filter: none; background: #f6f8fb; }
 }
-
-button:disabled {
-  cursor: not-allowed;
+@media (prefers-reduced-motion: reduce) {
+  .jp-page *, .jp-page *::before { transition: none !important; scroll-behavior: auto !important; }
 }
-
-::selection {
-  background: #f8dfcf;
-}
-
-.jp-page {
-  background-color: #fbfaf7;
-  background-image:
-    linear-gradient(rgba(214, 211, 209, 0.22) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(214, 211, 209, 0.18) 1px, transparent 1px);
-  background-size: 28px 28px;
-}
-
-.jp-sidebar {
-  background: rgba(255, 253, 248, 0.96);
-  backdrop-filter: blur(8px);
-}
-
-.jp-panel {
-  background: #fffaf2;
-}
-
-.jp-day-title {
-  background: #fffaf2;
-}
-
-.jp-day-title::before {
-  display: inline-block;
-  width: 0.55rem;
-  height: 0.55rem;
-  margin-right: 0.5rem;
-  border: 1px solid #e7c7b0;
-  border-radius: 2px;
-  background: #f8dfcf;
-  content: "";
-}
-
-.jp-mark {
-  color: #d98b75;
-}
-
-.jp-page { background-image: none; background-color: #fafafa; }
-.jp-panel { background: #f5f7f5; }

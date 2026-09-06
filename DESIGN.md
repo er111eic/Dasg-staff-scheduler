@@ -1,39 +1,39 @@
 # Design System
 
-This interface follows a quiet productivity-tool style inspired by Apple, Notion, Linear, and restrained Japanese stationery.
+This interface uses a web interpretation of Liquid Glass: translucent controls, silver-white surfaces, fine highlights, and a restrained blue selection accent.
 
 ## Principles
 
-- Keep the screen functional first: no decorative panels, gradients, or marketing copy.
+- Keep the screen functional first. Use a solid light-gray background and high-opacity white controls for clear separation.
 - Use neutral surfaces with subtle contrast instead of heavy blocks of color.
 - Prefer thin borders, small radii, compact spacing, and stable dimensions.
 - Make active states obvious but restrained.
 - Keep mobile controls reachable without covering the schedule.
-- Cute details should stay tiny: paper texture, warm accents, and one or two symbolic marks only.
+- Apply backdrop blur only to navigation and controls, not every schedule cell.
+- Provide opaque fallbacks when transparency is reduced or backdrop blur is unavailable.
 
 ## Palette
 
-- Page: `#fbfaf7`
+- Page: `#e5e7eb`
 - Surface: `#ffffff`
-- Warm surface: `#fffdf8`
-- Muted surface: `#fff8ee`
-- Border: `#eadfd5`
-- Strong border: `#e4cbb9`
-- Accent: `#d98b75`
-- Text: `#1c1917`
-- Muted text: `#78716c`
-- Primary action: `#1c1917`
+- Day heading: `#edf0f4`
+- Assigned slot: `#eef3fa`
+- Border: `rgba(73, 82, 96, 0.24)`
+- Selected border: `#4793e7`
+- Text: `#202124`
+- Muted text: `#626b77`
+- Staff selection: `#0066cc`
 - Danger: `#dc2626`
 
 ## Components
 
-- Sidebar: fixed on desktop, sticky compact toolbar on mobile, white surface, single right or bottom border.
-- Buttons: 6px radius, solid primary only for the main action, bordered secondary actions.
-- Inputs: white background, light border, no decorative shadow.
-- Schedule cells: white surface, thin border, subtle hover state.
+- Sidebar: fixed on desktop, sticky on mobile; translucent with blur and a white edge highlight.
+- Buttons: 8px radius, subtle glass highlights; blue for selection and primary actions.
+- Inputs: translucent white with a fine border and visible keyboard focus.
+- Courses: unframed white rows; borders belong to individual assignment slots.
 - Status panels: compact, two-column on mobile, stacked on desktop.
 - Admin tools: hidden by default and visually secondary.
-- Japanese accent layer: light paper-grid background, soft peach section headers, and a single flower mark in the app title.
+- Glass effects remain secondary to readable course names and assignment states.
 
 ## Mobile
 

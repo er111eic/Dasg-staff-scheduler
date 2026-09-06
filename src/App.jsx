@@ -1262,7 +1262,8 @@ export default function ActivitySchedulerPrototype() {
               key={person}
               draggable
               onDragStart={(event) => handleStaffDragStart(event, person)}
-              className={`grid flex-none grid-cols-[minmax(0,1fr)_24px] items-center rounded-md border transition lg:grid-cols-[minmax(0,1fr)_28px] ${
+              data-selected={selectedStaff === person}
+              className={`staff-choice grid flex-none grid-cols-[minmax(0,1fr)_24px] items-center rounded-md border transition lg:grid-cols-[minmax(0,1fr)_28px] ${
                 selectedStaff === person
                   ? "border-[#2f2a25] bg-[#2f2a25] text-white"
                   : "border-[#eadfd5] bg-[#fffdf8] text-stone-800 hover:border-[#e4cbb9] hover:bg-[#fff8ee]"
@@ -1294,7 +1295,7 @@ export default function ActivitySchedulerPrototype() {
     if (!visibleRoles.length) return null;
 
     return (
-      <div className={`rounded-md border border-[#eadfd5] bg-[#fffdf8] px-3 py-2 ${compact ? "min-w-[430px]" : ""}`}>
+      <div className={`continuous-assignments rounded-md border border-[#eadfd5] bg-[#fffdf8] px-3 py-2 ${compact ? "min-w-[430px]" : ""}`}>
         <div className={compact ? "flex items-center gap-3 whitespace-nowrap" : ""}>
           <div className={compact ? "shrink-0 text-xs font-semibold text-stone-500" : "mb-2 text-xs font-semibold text-stone-500"}>整場工作</div>
           <div className={compact ? "flex min-w-0 items-center gap-2" : "grid grid-cols-2 gap-2"}>
@@ -1306,9 +1307,11 @@ export default function ActivitySchedulerPrototype() {
             return (
               <div
                 key={slotKey}
+                data-filled={Boolean(person)}
+                data-selected={isSelectedPerson}
                 onDragOver={(event) => event.preventDefault()}
                 onDrop={(event) => handleDropToSlot(event, slotKey)}
-                className={`relative rounded-md border text-xs transition ${compact ? "min-h-[46px] min-w-[145px]" : "min-h-[50px]"} ${
+                className={`assignment-slot relative rounded-md border text-xs transition ${compact ? "min-h-[46px] min-w-[145px]" : "min-h-[50px]"} ${
                   isSelectedPerson
                     ? "border-[#d98b75] bg-[#fff1e6] shadow-[inset_0_0_0_1px_#d98b75]"
                     : person
@@ -1344,7 +1347,7 @@ export default function ActivitySchedulerPrototype() {
 
   function renderAssignmentSlots({ date, time, activityId }) {
     return (
-      <div className="mt-3 grid grid-cols-2 gap-2 xl:grid-cols-5">
+      <div className="assignment-grid mt-3 grid grid-cols-2 gap-2 xl:grid-cols-5">
         {sessionRoleSlots.map((role) => {
           const slotKey = createSlotKey(date, time, activityId, role);
           const person = assignments[slotKey];
@@ -1354,9 +1357,12 @@ export default function ActivitySchedulerPrototype() {
           return (
             <div
               key={slotKey}
+              data-filled={Boolean(person)}
+              data-selected={isSelectedPerson}
+              data-conflict={conflict}
               onDragOver={(event) => event.preventDefault()}
               onDrop={(event) => handleDropToSlot(event, slotKey)}
-              className={`relative min-h-[58px] rounded-md border text-xs transition ${
+              className={`assignment-slot relative min-h-[58px] rounded-md border text-xs transition ${
                 isSelectedPerson
                   ? conflict
                     ? "border-red-400 bg-red-50 shadow-[inset_0_0_0_1px_#d98b75]"
@@ -1402,7 +1408,7 @@ export default function ActivitySchedulerPrototype() {
       <div
         onDragOver={(event) => event.preventDefault()}
         onDrop={(event) => handleDropToSession(event, date, time, activity.id)}
-        className="min-h-[112px] rounded-md border border-[#eadfd5] bg-white p-3 transition hover:border-[#e4cbb9] hover:bg-[#fffdf8]"
+        className="course-cell min-h-[112px] bg-white p-3 transition"
       >
         <button type="button" onClick={() => assignPersonToNextSlot(date, time, activity.id)} className="w-full text-left text-sm font-semibold leading-relaxed text-stone-950">
           {session.content}
@@ -1556,7 +1562,6 @@ export default function ActivitySchedulerPrototype() {
       <div className="min-h-screen lg:pl-64">
         <aside className={`jp-sidebar ${mobileToolsOpen ? "mobile-tools-open" : ""} sticky top-0 z-30 max-h-[46vh] overflow-y-auto border-b border-[#eadfd5] p-3 shadow-sm shadow-stone-200/60 lg:fixed lg:inset-y-0 lg:left-0 lg:z-20 lg:max-h-none lg:w-64 lg:border-b-0 lg:border-r lg:p-5 lg:shadow-none`}>
           <h1 className="flex items-center gap-2 text-lg font-bold lg:text-2xl">
-            <span className="jp-mark text-base" aria-hidden="true">✿</span>
             活動人力排班
             <button type="button" aria-expanded={mobileToolsOpen} onClick={() => setMobileToolsOpen((open) => !open)} className="ml-auto text-xs font-normal lg:hidden">{mobileToolsOpen ? "收合工具" : "更多工具"}</button>
           </h1>
@@ -1656,7 +1661,7 @@ export default function ActivitySchedulerPrototype() {
                 第 {activeEventIndex + 1} / {events.length} 場，{schedules.length} 天活動，已安排 {assignedCount} 格
               </div>
             </div>
-            <div className="hidden flex-wrap items-center gap-2 lg:flex">
+            <div className="header-status hidden flex-wrap items-center gap-2 lg:flex">
               <div className="rounded-md border border-[#eadfd5] bg-[#fffdf8] px-3 py-2 text-sm">
                 同步：<span className="font-semibold">{syncStatus}</span>
               </div>
@@ -1799,7 +1804,7 @@ export default function ActivitySchedulerPrototype() {
                   <section id={`schedule-day-${dayIndex}`} key={day.date} className={`schedule-day overflow-x-auto border border-[#eadfd5] bg-white ${activities.length === 1 ? "single-activity" : ""}`}>
                     <div style={{ minWidth: activities.length === 1 ? 0 : `${100 + activities.length * 320}px` }}>
                       <div className="jp-day-title border-b border-[#f0e8de] px-4 py-3 text-center text-lg font-bold">{day.date}</div>
-                      <div className="grid border-b border-[#eadfd5] bg-[#fff8ee] text-sm font-semibold text-stone-700" style={{ gridTemplateColumns }}>
+                      <div className="activity-header grid border-b border-[#eadfd5] bg-[#fff8ee] text-sm font-semibold text-stone-700" style={{ gridTemplateColumns }}>
                         {activities.length !== 1 && <div className="border-r border-[#eadfd5] p-3">時段</div>}
                         {activities.map((activity, activityIndex) => (
                           <div key={activity.id} className="border-r border-[#eadfd5] p-3 last:border-r-0">
